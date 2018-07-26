@@ -3,8 +3,10 @@ from flask import request
 from flask import jsonify
 import json
 from flask import abort, redirect, url_for
-import importer
+import executor
 import os
+
+du_list = []
 
 application = Flask(__name__)
 
@@ -24,18 +26,21 @@ def invoke():
 	invoked_function="main()"
 	#os.chdir('./du_files')
 	#exec("import du_0")
-	return eval("du_0."+invoked_function)
+	return call_function(invoked_function)
 
+@application.route("/load", methods=['GET','POST'])
+def load_cloudbook():
+	print "enter in load_cloudbook"
+	du_list = ["du_0"]
+	#aqui hay que resetear el web server para poder hacer los imports
+	__main__
+	#return du_list
 
-
+def call_function(function):
+	return eval("du_0."+function)
 
 if __name__ == "__main__":
-	du_list = []
-	du_list = importer.load_cloudbook()
-	importer.import_dus(du_list)
-	#os.chdir("./du_files")
-	#exec("import du_0")
-	exec ("from du_files import du_0")
-	print "hola"
-	du_0.main()
+	for i in du_list:
+		exec("from du_files import "+i)
+
 	application.run(debug=True, host='0.0.0.0', port = 3000)

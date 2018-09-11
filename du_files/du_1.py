@@ -9,6 +9,6 @@ def f1():
 
 def f2():
 	print "dir1.file2.f2: hello world"
-	
+	print "this is du1"
 	return 'cloudbook' 
 

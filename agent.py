@@ -5,6 +5,15 @@ import json
 from flask import abort, redirect, url_for
 import importer
 import os
+import sys
+import requests # this import requires pip install requests
+
+# agent_ID of this agent. this is a global var
+my_agent_ID=-1
+# list of Deployable units loaded by this agent
+du_list=[]
+
+
 
 application = Flask(__name__)
 
@@ -14,7 +23,7 @@ def hello():
 	return  "Hello"
 
 @application.route("/invoke", methods=['GET','POST'])
-def invoke():
+def invoke(invoked_function="none"):
 	#Lo que llega es un json
 	#miramos el campo nombre de funcion, nombre del modulo de funcion, si existe en la du_list, la invocamos
 	#y si no, hay que invocar al agente que la contenga, consultando el cloudbook
@@ -22,48 +31,91 @@ def invoke():
 	
 	# example of invocation
 	# http://localhost:3000/invoke?invoked_function=compute(56,77,5)
-	invoked_function=request.args.get('invoked_function')
-
-	# check if invoked function belongs to this agent, otherwise will re-invoke to the right agent
-	# PENDIENTE DE PROGRAMAR
+	
+	if invoked_function=="none":
+		invoked_function=request.args.get('invoked_function')
+		print "external invocation"
+	else :
+		print "internal invocation"
 
 	print "invoked_function = "+invoked_function
-	#supongamos que procesamos el post y llega esto
-	# invoked_function="main()"
-	#os.chdir('./du_files')
-	#exec("import du_0")
-	#return eval("du_0."+invoked_function)
-	#return eval("du_0."+"main("+"cosa"+")")
-	a= eval("du_0."+"main()")
-	print "funcion terminada ok"
+	# check if invoked function belongs to this agent, otherwise will re-invoke to the right agent
+	j=invoked_function.find(".")
+	invoked_du= invoked_function[0:j]
+	print "invoked_du ", invoked_du
+
+	if invoked_du in du_list:
+		a= eval(invoked_function)
+		#supongamos que procesamos el post y llega esto
+		# invoked_function="main()"
+		#os.chdir('./du_files')
+		#exec("import du_0")
+		#return eval("du_0."+invoked_function)
+		#return eval("du_0."+"main("+"cosa"+")")
+		#a= eval("du_0."+"main()")
+		#if invoked_function belongs to this agent, then it can be evaluated
+		#a= eval(invoked_function)
+	else:
+		print "la funcion no pertenece a este agente"
+		a = "none" #remote_invoke(invoked_du, invoked_function)
+
+	print "function executed ok"
 	print a
 	return a
 
-def cosa(k):
-	print k
-	return "cloudbook"
+#def cosa(k):
+#	print k
+#	return "cloudbook"
+
+#def remote_invoke(invoked_du, invoked_function):
+def remote_invoke(invoked_function):
+	# get the machines from cloudbook_dus dictionary
+	print "ENTER in remote_invoke..."
+	host="127.0.0.1:3001"
+	url='http://'+host+"/invoke?invoked_function="+invoked_function
+	print url
+	r = requests.get(url)
+	print "request lanzada", url
+	print r.text
+	return r.text
+
 
 
 
 
 if __name__ == "__main__":
-	du_list = []
-	du_list = importer.load_cloudbook()
-	importer.import_dus(du_list)
 
-	du_list=["du_0"] # fake
+	#extract args and get the agent ID
+	print "Nume params: ", len(sys.argv)
+	print "List of args: ", sys.argv
+	i=0
+	
+	for arg in sys.argv:
+		i=i+1
+		if arg=="-agentID":
+			my_agent_ID=sys.argv[i]
+
+	print "my_agent_ID="+my_agent_ID
+
+	print "loading deployable units for agent "+my_agent_ID+"..."
+	
+	du_list = importer.load_cloudbook("agent_"+my_agent_ID)
+	
+    
+
+	#du_list=["du_0"] # fake
 	
 	j = du_list[0].rfind('_')+1
-	num_du = du_list[0][j:]
 	# num_du is the initial DU and will be used as offset for listen port
-	print num_du
-	#os.chdir("./du_files")
+	num_du = du_list[0][j:]
+	
+	
 	#exec("import du_0")
+	#du_0.invoker=cosa
 	# du_files is the distributed directory containing all DU files
 	for du in du_list:
 		exec ("from du_files import "+du)
-
-	du_0.invoker=cosa
-	print "hola"
-	du_0.main()
+		#exec(du+".invoker=invoke")
+		exec(du+".invoker=remote_invoke")
+	#du_0.main()
 	application.run(debug=True, host='0.0.0.0', port = 3000+int(num_du))

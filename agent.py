@@ -129,11 +129,11 @@ if __name__ == "__main__":
 
 	print "loading deployable units for agent "+my_agent_ID+"..."
 	
-	du_list = loader.load_cloudbook_agent_dus("agent_"+my_agent_ID)
+	
 
 	cloudbook_dict_agents = loader.load_cloudbook_agents()
 	cloudbook_dict_dus = loader.load_cloudbook_dus()
-	
+	du_list = loader.load_cloudbook_agent_dus("agent_"+my_agent_ID, cloudbook_dict_agents)
     
 
 	#du_list=["du_0"] # fake

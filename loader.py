@@ -2,10 +2,10 @@ import json
 import subprocess
 import os
 
-def load_cloudbook_agent_dus(my_agent_ID):
+def load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents):
 	# this function loads the list of deployable units belonging to certain agent ID
-	with open('./du_files/cloudbook_agents.json', 'r') as file:
-		cloudbook_dict_agents = json.load(file)
+	#with open('./du_files/cloudbook_agents.json', 'r') as file:
+	#	cloudbook_dict_agents = json.load(file)
 	
 	my_agent_dict={}
 	for key in cloudbook_dict_agents:

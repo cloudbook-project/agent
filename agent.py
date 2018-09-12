@@ -3,7 +3,7 @@ from flask import request
 from flask import jsonify
 import json
 from flask import abort, redirect, url_for
-import importer
+import loader
 import os
 import sys
 import requests # this import requires pip install requests
@@ -12,7 +12,11 @@ import requests # this import requires pip install requests
 my_agent_ID=-1
 # list of Deployable units loaded by this agent
 du_list=[]
+# dictionary of dus and location
+cloudbook_dict_dus={}
 
+#dictionary of agents 
+cloudbook_dict_agents={}
 
 
 application = Flask(__name__)
@@ -69,9 +73,35 @@ def invoke(invoked_function="none"):
 
 #def remote_invoke(invoked_du, invoked_function):
 def remote_invoke(invoked_function):
-	# get the machines from cloudbook_dus dictionary
 	print "ENTER in remote_invoke..."
-	host="127.0.0.1:3001"
+	# get the remote du 
+	j=invoked_function.find(".")
+	remote_du= invoked_function[0:j]
+	print "remote du = ", remote_du
+    # get the possible agents to invoke
+ 	list_agents=cloudbook_dict_dus.get(remote_du)
+
+    # get the machines to invoke
+	remote_agent= list_agents[0] # several agents can have this remote DU. In order to test, get the first
+	print "remote agent", remote_agent
+
+	print "cloudbook_dict_agents = ", cloudbook_dict_agents
+
+	machine_dict=cloudbook_dict_agents.get(remote_agent)
+
+	print "machine_dict ", machine_dict
+
+	host =machine_dict.keys()[0]
+	print "el host obtenido es ", host
+
+	#remote port
+	j = remote_du.rfind('_')+1
+	# num_du is the initial DU and will be used as offset for listen port
+	num_remote_du = remote_du[j:]
+
+	#host="127.0.0.1:3001"
+	remote_port =3000+ int(num_remote_du)
+	host = host+":"+str (remote_port)
 	url='http://'+host+"/invoke?invoked_function="+invoked_function
 	print url
 	r = requests.get(url)
@@ -99,7 +129,10 @@ if __name__ == "__main__":
 
 	print "loading deployable units for agent "+my_agent_ID+"..."
 	
-	du_list = importer.load_cloudbook("agent_"+my_agent_ID)
+	du_list = loader.load_cloudbook_agent_dus("agent_"+my_agent_ID)
+
+	cloudbook_dict_agents = loader.load_cloudbook_agents()
+	cloudbook_dict_dus = loader.load_cloudbook_dus()
 	
     
 

@@ -22,6 +22,12 @@ def load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents):
 	return du_list
 	#return ["du_0"]
 
+def load_dictionary(filename):
+	with open(filename, 'r') as file:
+		aux = json.load(file)
+	return aux
+
+"""
 def load_cloudbook_dus():
 	# this function loads the list of dus and their machines
 	with open('./du_files/cloudbook_dus.json', 'r') as file:
@@ -37,3 +43,4 @@ def load_cloudbook_agents():
 		cloudbook_dict_agents = json.load(file)
 
 	return cloudbook_dict_agents
+"""

@@ -9,14 +9,19 @@ import sys
 import requests # this import requires pip install requests
 
 # agent_ID of this agent. this is a global var
-my_agent_ID=-1
-# list of Deployable units loaded by this agent
-du_list=[]
+my_agent_ID="None"
+
 # dictionary of dus and location
 cloudbook_dict_dus={}
 
 #dictionary of agents 
 cloudbook_dict_agents={}
+
+# list of Deployable units loaded by this agent
+du_list=[]
+
+# dictionary of config
+config_dict={}
 
 
 application = Flask(__name__)
@@ -115,11 +120,15 @@ def remote_invoke(invoked_function):
 
 if __name__ == "__main__":
 
+	#load config file
+	config_dict=loader.load_dictionary("./config.json")
+
 	#extract args and get the agent ID
 	print "Nume params: ", len(sys.argv)
 	print "List of args: ", sys.argv
-	i=0
-	
+
+
+	i=0 # argument counter
 	for arg in sys.argv:
 		i=i+1
 		if arg=="-agentID":
@@ -127,12 +136,20 @@ if __name__ == "__main__":
 
 	print "my_agent_ID="+my_agent_ID
 
+	#if no agent id at invocation, then use config file
+	if my_agent_ID=="None":
+		my_agent_ID=config_dict.get("AGENT_ID")
+
 	print "loading deployable units for agent "+my_agent_ID+"..."
 	
 	
 
-	cloudbook_dict_agents = loader.load_cloudbook_agents()
-	cloudbook_dict_dus = loader.load_cloudbook_dus()
+	#cloudbook_dict_agents = loader.load_cloudbook_agents()
+
+	cloudbook_dict_agents = loader.load_dictionary('./du_files/cloudbook_agents.json')
+
+	#cloudbook_dict_dus = loader.load_cloudbook_dus()
+	cloudbook_dict_dus = loader.load_dictionary('./du_files/cloudbook_dus.json')
 	du_list = loader.load_cloudbook_agent_dus("agent_"+my_agent_ID, cloudbook_dict_agents)
     
 

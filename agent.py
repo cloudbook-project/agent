@@ -98,7 +98,7 @@ def remote_invoke(invoked_function):
 
 	host =machine_dict.keys()[0]
 	print "el host obtenido es ", host
-
+	"""
 	#remote port
 	j = remote_du.rfind('_')+1
 	# num_du is the initial DU and will be used as offset for listen port
@@ -107,6 +107,8 @@ def remote_invoke(invoked_function):
 	#host="127.0.0.1:3001"
 	remote_port =3000+ int(num_remote_du)
 	host = host+":"+str (remote_port)
+	"""
+
 	url='http://'+host+"/invoke?invoked_function="+invoked_function
 	print url
 	r = requests.get(url)
@@ -141,9 +143,6 @@ if __name__ == "__main__":
 		my_agent_ID=config_dict.get("AGENT_ID")
 
 	print "loading deployable units for agent "+my_agent_ID+"..."
-	
-	
-
 	#cloudbook_dict_agents = loader.load_cloudbook_agents()
 
 	cloudbook_dict_agents = loader.load_dictionary('./du_files/cloudbook_agents.json')
@@ -159,6 +158,15 @@ if __name__ == "__main__":
 	# num_du is the initial DU and will be used as offset for listen port
 	num_du = du_list[0][j:]
 	
+
+	host =cloudbook_dict_agents.get("agent_"+str(my_agent_ID)).keys()[0]
+	print "hola", host
+
+	local_port=int(host[host.find(":")+1:])
+	host=host[0:host.find(":")]
+
+	print host, local_port
+
 	
 	#exec("import du_0")
 	#du_0.invoker=cosa
@@ -168,4 +176,5 @@ if __name__ == "__main__":
 		#exec(du+".invoker=invoke")
 		exec(du+".invoker=remote_invoke")
 	#du_0.main()
-	application.run(debug=True, host='0.0.0.0', port = 3000+int(num_du))
+	#application.run(debug=True, host='0.0.0.0', port = 3000+int(num_du))
+	application.run(debug=True, host=host,port=local_port)

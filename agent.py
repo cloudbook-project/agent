@@ -147,8 +147,14 @@ if __name__ == "__main__":
 
 	cloudbook_dict_agents = loader.load_dictionary('./du_files/cloudbook_agents.json')
 
+	# generate dus dictionary cloudbook_dict_dus 
+	# example: {"du_0": ["agent_0"], "du_1": ["agent_1"]}
+	cloudbook_dict_dus	= loader.compute_dus(cloudbook_dict_agents)
+
 	#cloudbook_dict_dus = loader.load_cloudbook_dus()
-	cloudbook_dict_dus = loader.load_dictionary('./du_files/cloudbook_dus.json')
+	#cloudbook_dict_dus = loader.load_dictionary('./du_files/cloudbook_dus.json')
+
+
 	du_list = loader.load_cloudbook_agent_dus("agent_"+my_agent_ID, cloudbook_dict_agents)
     
 

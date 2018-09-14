@@ -27,6 +27,41 @@ def load_dictionary(filename):
 		aux = json.load(file)
 	return aux
 
+
+def compute_dus(agents):
+	
+
+	dus={}
+
+	max_du=0
+	for key in agents:
+		agent=agents.get(key)
+		print "agent", agent
+		for host,agent_dus in agent.iteritems():
+			for item in agent_dus:
+				index =int (item[item.find("_")+1:])
+				if index> max_du :
+					max_du=index
+
+	print "max_du", max_du
+	print "agents", agents
+	for i in range (0,max_du+1):
+		print "du=",i
+		du="du_"+str(i)
+		dus[du]=[]
+		for key in agents:
+			agent=agents.get(key)
+			for host,agent_dus in agent.iteritems():
+				if  du in agent_dus:
+					dus[du].append(key)
+
+	print "------------------------"
+	print dus
+	print "------------------------"
+	return dus
+
+
+
 """
 def load_cloudbook_dus():
 	# this function loads the list of dus and their machines

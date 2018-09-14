@@ -1,6 +1,5 @@
 {
 	
-	"LISTEN_START_PORT": 3000,
 	"AGENT_ID": "0" ,
 	"DISTRIBUTED_FS" : ""
 

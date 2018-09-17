@@ -1,0 +1,64 @@
+Nume params:  3
+List of args:  ['agent.py', '-agentID', '1']
+my_agent_ID=1
+loading deployable units for agent 1...
+agent {u'127.0.0.1:3001': [u'du_1']}
+agent {u'127.0.0.1:3000': [u'du_0']}
+max_du 1
+agents {u'agent_1': {u'127.0.0.1:3001': [u'du_1']}, u'agent_0': {u'127.0.0.1:3000': [u'du_0']}}
+du= 0
+du= 1
+------------------------
+{'du_0': [u'agent_0'], 'du_1': [u'agent_1']}
+------------------------
+--> {u'127.0.0.1:3001': [u'du_1']}
+[u'du_1']
+du_list to load: [u'du_1']
+this host is  127.0.0.1:3001
+127.0.0.1 3001
+external invocation
+invoked_function = du_1.f1()
+invoked_du  du_1
+dir1.file2.f2: hello world 
+
+dir1.file2.f2: hello world 
+
+dir1.file2.f2: hello world 
+
+dir1.file2.f2: hello world 
+
+dir1.file2.f2: hello world 
+
+dir1.file2.f2: hello world 
+
+dir1.file2.f2: hello world 
+
+dir1.file2.f2: hello world 
+
+dir1.file2.f2: hello world 
+
+
+
+external invocation
+invoked_function = du_1.f1()
+invoked_du  du_1
+dir1.file2.f2: hello world 
+
+dir1.file2.f2: hello world 
+
+dir1.file2.f2: hello world 
+
+dir1.file2.f2: hello world 
+
+dir1.file2.f2: hello world 
+
+dir1.file2.f2: hello world 
+
+dir1.file2.f2: hello world 
+
+dir1.file2.f2: hello world 
+
+dir1.file2.f2: hello world 
+
+
+

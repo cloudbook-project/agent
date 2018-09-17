@@ -7,6 +7,7 @@ import loader
 import os
 import sys
 import requests # this import requires pip install requests
+import logging
 
 # agent_ID of this agent. this is a global var
 my_agent_ID="None"
@@ -65,11 +66,13 @@ def invoke(invoked_function="none"):
 		#if invoked_function belongs to this agent, then it can be evaluated
 		#a= eval(invoked_function)
 	else:
-		print "la funcion no pertenece a este agente"
+		print "this function does not belong to this agent"
 		a = "none" #remote_invoke(invoked_du, invoked_function)
 
-	print "function executed ok"
-	print a
+	#print "function executed ok"
+	#print a
+	print "\n"
+	#stdout.flush()
 	return a
 
 #def cosa(k):
@@ -83,6 +86,13 @@ def remote_invoke(invoked_function):
 	j=invoked_function.find(".")
 	remote_du= invoked_function[0:j]
 	print "remote du = ", remote_du
+
+	if remote_du in du_list:
+		#this is not remote
+		print "local invocation: ",invoked_function[j+1:]
+		res=eval(invoked_function[j+1:])
+		return res
+
     # get the possible agents to invoke
  	list_agents=cloudbook_dict_dus.get(remote_du)
 
@@ -97,7 +107,7 @@ def remote_invoke(invoked_function):
 	print "machine_dict ", machine_dict
 
 	host =machine_dict.keys()[0]
-	print "el host obtenido es ", host
+	print "host to invoke is ", host
 	"""
 	#remote port
 	j = remote_du.rfind('_')+1
@@ -112,8 +122,10 @@ def remote_invoke(invoked_function):
 	url='http://'+host+"/invoke?invoked_function="+invoked_function
 	print url
 	r = requests.get(url)
-	print "request lanzada", url
+	print "request launched", url
 	print r.text
+	print "\n"
+	#stdout.flush()
 	return r.text
 
 
@@ -123,7 +135,7 @@ def remote_invoke(invoked_function):
 if __name__ == "__main__":
 
 	#load config file
-	config_dict=loader.load_dictionary("./config.json")
+	config_dict=loader.load_dictionary("./config_agent.json")
 
 	#extract args and get the agent ID
 	print "Nume params: ", len(sys.argv)
@@ -166,7 +178,7 @@ if __name__ == "__main__":
 	
 
 	host =cloudbook_dict_agents.get("agent_"+str(my_agent_ID)).keys()[0]
-	print "hola", host
+	print "this host is ", host
 
 	local_port=int(host[host.find(":")+1:])
 	host=host[0:host.find(":")]
@@ -181,6 +193,11 @@ if __name__ == "__main__":
 		exec ("from du_files import "+du)
 		#exec(du+".invoker=invoke")
 		exec(du+".invoker=remote_invoke")
+		
+		#exec('du_0.invoker("du_0.hello()")')		
 	#du_0.main()
 	#application.run(debug=True, host='0.0.0.0', port = 3000+int(num_du))
-	application.run(debug=True, host=host,port=local_port)
+	log = logging.getLogger('werkzeug')
+	log.setLevel(logging.ERROR)
+	
+	application.run(debug=False, host=host,port=local_port,threaded=True)

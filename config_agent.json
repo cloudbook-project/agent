@@ -1,6 +1,1 @@
-{
-	
-	"AGENT_ID": "0" ,
-	"DISTRIBUTED_FS" : ""
-
-}
+{"AGENT_ID": "0", "DISTRIBUTED_FS": "", "CIRCLE_ID": ""}

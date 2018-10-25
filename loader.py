@@ -10,15 +10,15 @@ def load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents):
 	my_agent_dict={}
 	for key in cloudbook_dict_agents:
 		if (key==my_agent_ID):
-			print "-->",cloudbook_dict_agents.get(key)
+			print ("-->",cloudbook_dict_agents.get(key))
 			my_agent_dict=cloudbook_dict_agents.get(key)
 
 	du_list=[]
 	for key, value in my_agent_dict.items():
 		du_list=value
 
-	print du_list
-	print "du_list to load: "+str(du_list)
+	print (du_list)
+	print ("du_list to load: "+str(du_list))
 	return du_list
 	#return ["du_0"]
 
@@ -36,28 +36,28 @@ def compute_dus(agents):
 	max_du=0
 	for key in agents:
 		agent=agents.get(key)
-		print "agent", agent
-		for host,agent_dus in agent.iteritems():
+		print ("agent", agent)
+		for host,agent_dus in agent.items():
 			for item in agent_dus:
 				index =int (item[item.find("_")+1:])
 				if index> max_du :
 					max_du=index
 
-	print "max_du", max_du
-	print "agents", agents
+	print ("max_du", max_du)
+	print ("agents", agents)
 	for i in range (0,max_du+1):
-		print "du=",i
+		print ("du=",i)
 		du="du_"+str(i)
 		dus[du]=[]
 		for key in agents:
 			agent=agents.get(key)
-			for host,agent_dus in agent.iteritems():
+			for host,agent_dus in agent.items():
 				if  du in agent_dus:
 					dus[du].append(key)
 
-	print "------------------------"
-	print dus
-	print "------------------------"
+	print ("------------------------")
+	print (dus)
+	print ("------------------------")
 	return dus
 
 

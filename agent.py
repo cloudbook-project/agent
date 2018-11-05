@@ -30,8 +30,15 @@ du_list=[]
 # dictionary of config
 config_dict={}
 
+#Global variable to define working mode
+LOCAL_MODE = False
+
 
 application = Flask(__name__)
+
+def set_local_mode(mode):
+	global LOCAL_MODE
+	LOCAL_MODE = mode
 
 @application.route("/", methods=['GET', 'PUT', 'POST'])
 def hello():
@@ -205,8 +212,9 @@ if __name__ == "__main__":
 	print (host, local_port)
 
 	#Pending: check if previous port is closed.
-	while(upnp.openPort(local_port)):
-		continue
+	if (not LOCAL_MODE):
+		while(upnp.openPort(local_port)):
+			continue
 
 	
 	#exec("import du_0")
@@ -223,5 +231,5 @@ if __name__ == "__main__":
 	log = logging.getLogger('werkzeug')
 	log.setLevel(logging.ERROR)
 	
-	threading.Thread(target=publisher_frontend.announceAgent, args=(my_circle_ID, my_agent_ID)).start()
+	threading.Thread(target=publisher_frontend.announceAgent, args=(my_circle_ID, my_agent_ID, LOCAL_MODE)).start()
 	application.run(debug=False, host=host,port=local_port,threaded=True)

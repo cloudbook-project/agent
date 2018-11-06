@@ -182,19 +182,19 @@ if __name__ == "__main__":
 	print ("loading deployable units for agent "+my_agent_ID+"...")
 	#cloudbook_dict_agents = loader.load_cloudbook_agents()
 
-	#Check dictionaries that are really used
-
+	#It will only contain info about agent_id : du_assigned (not IP)
+	#must be the output file from DEPLOYER
 	cloudbook_dict_agents = loader.load_dictionary('./du_files/cloudbook_agents.json')
 
 	# generate dus dictionary cloudbook_dict_dus 
-	# example: {"du_0": ["agent_0"], "du_1": ["agent_1"]}
+	# example: {"du_0": "agent_0", "du_1": "agent_1"}
 	cloudbook_dict_dus	= loader.compute_dus(cloudbook_dict_agents)
 
 	#cloudbook_dict_dus = loader.load_cloudbook_dus()
 	#cloudbook_dict_dus = loader.load_dictionary('./du_files/cloudbook_dus.json')
 
 
-	du_list = loader.load_cloudbook_agent_dus("agent_"+my_agent_ID, cloudbook_dict_agents)
+	du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
     
 
 	#du_list=["du_0"] # fake

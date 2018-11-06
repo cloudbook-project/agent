@@ -29,6 +29,12 @@ def load_dictionary(filename):
 
 
 def compute_dus(agents):
+	res = {v:k for k,v in agents.items()}
+	return res
+
+"""
+#Not neccesary like this as long as the cloudbook_dict will only contain the pair agent : du
+def compute_dus(agents):
 	
 
 	dus={}
@@ -59,7 +65,7 @@ def compute_dus(agents):
 	print (dus)
 	print ("------------------------")
 	return dus
-
+"""
 
 
 """

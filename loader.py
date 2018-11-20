@@ -6,16 +6,21 @@ def load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents):
 	# this function loads the list of deployable units belonging to certain agent ID
 	#with open('./du_files/cloudbook_agents.json', 'r') as file:
 	#	cloudbook_dict_agents = json.load(file)
-	
-	my_agent_dict={}
-	for key in cloudbook_dict_agents:
-		if (key==my_agent_ID):
-			print ("-->",cloudbook_dict_agents.get(key))
-			my_agent_dict=cloudbook_dict_agents.get(key)
-
 	du_list=[]
-	for key, value in my_agent_dict.items():
-		du_list=value
+	for du in cloudbook_dict_agents:
+		for agent in cloudbook_dict_agents[du]:
+			if agent == my_agent_ID:
+				du_list.append(du)
+	
+	#my_agent_dict={}
+	#for key in cloudbook_dict_agents:
+	#	if (key==my_agent_ID):
+	#		print ("-->",cloudbook_dict_agents.get(key))
+	#		my_agent_dict=cloudbook_dict_agents.get(key)
+
+	#du_list=[]
+	#for key, value in my_agent_dict.items():
+	#	du_list=value
 
 	print (du_list)
 	print ("du_list to load: "+str(du_list))
@@ -26,13 +31,9 @@ def load_dictionary(filename):
 	with open(filename, 'r') as file:
 		aux = json.load(file)
 	return aux
-
-
-def compute_dus(agents):
-	res = {v:k for k,v in agents.items()}
-	return res
-
+	
 """
+
 #Not neccesary like this as long as the cloudbook_dict will only contain the pair agent : du
 def compute_dus(agents):
 	

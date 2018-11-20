@@ -6,10 +6,9 @@ from flask import request
 from flask import jsonify
 import json
 from flask import abort, redirect, url_for
-import loader, publisher_frontend, upnp
+import loader, publisher_frontend, upnp, local_publisher, configure_agent
 import os, sys, time, threading, logging
 import urllib.request # this import requires pip3 install urllib
-import random, string
 from pynat import get_ip_info #requires pip3 install pynat
 
 # agent_ID of this agent. this is a global var
@@ -107,7 +106,7 @@ def remote_invoke(invoked_function):
 		return res
 
     # get the possible agents to invoke
-	list_agents=cloudbook_dict_dus.get(remote_du)
+	list_agents=cloudbook_dict_agents.get(remote_du)
 
     # get the machines to invoke
 	remote_agent= list_agents[0] # several agents can have this remote DU. In order to test, get the first
@@ -142,24 +141,6 @@ def remote_invoke(invoked_function):
 	return r.text
 
 
-
-#Creates an agent ID in case it hasn't been created before, and writes it in configuration file
-def createAgentID():
-	global my_agent_ID
-	global my_circle_ID
-	#Random agent_id if it doesn't exist
-	my_agent_ID= ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20))
-	if config_dict["AGENT_ID"]=="0":
-		config_dict["AGENT_ID"]=my_agent_ID
-	else:
-		my_agent_ID=config_dict["AGENT_ID"]
-	my_circle_ID=config_dict["CIRCLE_ID"]
-	fo = open("config_agent.json", 'w')
-	json_data=json.dumps(config_dict)
-	fo.write(json_data)
-	fo.close()
-
-
 if __name__ == "__main__":
 
 	#load config file
@@ -175,7 +156,8 @@ if __name__ == "__main__":
 	# 	if arg=="-agentID":
 	# 		my_agent_ID=sys.argv[i]
 	
-	createAgentID()
+	(my_agent_ID, my_circle_ID) = configure_agent.createAgentID()
+	configure_agent.setGrantLevel("LO QUE SEA", my_agent_ID)
 
 	print ("my_agent_ID="+my_agent_ID)
 
@@ -186,14 +168,7 @@ if __name__ == "__main__":
 	#must be the output file from DEPLOYER
 	cloudbook_dict_agents = loader.load_dictionary('./du_files/cloudbook_agents.json')
 
-	# generate dus dictionary cloudbook_dict_dus 
-	# example: {"du_0": "agent_0", "du_1": "agent_1"}
-	cloudbook_dict_dus	= loader.compute_dus(cloudbook_dict_agents)
-
-	#cloudbook_dict_dus = loader.load_cloudbook_dus()
-	#cloudbook_dict_dus = loader.load_dictionary('./du_files/cloudbook_dus.json')
-
-
+	#Loads the DUs that belong to this agent.
 	du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
     
 
@@ -202,9 +177,11 @@ if __name__ == "__main__":
 	j = du_list[0].rfind('_')+1
 	# num_du is the initial DU and will be used as offset for listen port
 	num_du = du_list[0][j:]
-	
-	topology, external_ip, ext_port = get_ip_info()
-	host = external_ip
+	if (not LOCAL_MODE):
+		topology, external_ip, ext_port = get_ip_info()
+		host = external_ip
+	else:
+		host = local_publisher.get_local_ip()
 	print ("this host is ", host)
 
 	#Local port to be opened
@@ -230,6 +207,8 @@ if __name__ == "__main__":
 	#application.run(debug=True, host='0.0.0.0', port = 3000+int(num_du))
 	log = logging.getLogger('werkzeug')
 	log.setLevel(logging.ERROR)
-	
-	threading.Thread(target=publisher_frontend.announceAgent, args=(my_circle_ID, my_agent_ID, LOCAL_MODE)).start()
+	if (not LOCAL_MODE):
+		threading.Thread(target=publisher_frontend.announceAgent, args=(my_circle_ID, my_agent_ID)).start()
+	else:
+		threading.Thread(target=local_publisher.announceAgent, args=(my_circle_ID, my_agent_ID)).start()
 	application.run(debug=False, host=host,port=local_port,threaded=True)

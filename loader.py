@@ -1,6 +1,12 @@
 import json
 import subprocess
-import os
+import os, ast
+
+def load_cloudbook(filename):
+	with open(filename, "r") as file:
+		txt = str(file.read())
+		aux = dict(ast.literal_eval(txt))
+		return aux
 
 def load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents):
 	# this function loads the list of deployable units belonging to certain agent ID
@@ -31,6 +37,12 @@ def load_dictionary(filename):
 	with open(filename, 'r') as file:
 		aux = json.load(file)
 	return aux
+
+def write_dictionary(data, filename):
+	with open(filename, 'w') as file:
+		json_data=json.dumps(data)
+		file.write(json_data)
+		file.close()
 	
 """
 

@@ -8,48 +8,49 @@ def getAgentsCache():
     return agents_ip
 
 
-def announceAgent(my_circle_ID, my_agent_ID):
+def announceAgent(my_circle_ID, my_agent_ID, port):
     while(True):
-        # Getting local IP
-        internal_ip = get_local_ip  
-        #Checking if file is empty, if so, write the IP directly.
-        if os.stat("./cloudbook/local_IP_info.json").st_size==0:
-        	fo = open("./cloudbook/local_IP_info.json", 'w')
-        	data={}
-        	data[my_agent_ID]={}
-        	data[my_agent_ID]={}
-        	data[my_agent_ID]["IP"]=internal_ip
-        	json_data=json.dumps(data)
-        	fo.write(json_data)	
-        	fo.close()
-        # File not empty, so we open it to check if the agent has been already written on it.
-        else:
-        	fr = open("./cloudbook/local_IP_info.json", 'r')
-        	directory = json.load(fr)
-        	if my_agent_ID in directory:
-        		directory[my_agent_ID]["IP"]=internal_ip
-        		fo = open("./cloudbook/local_IP_info.json", 'w')
-        		directory= json.dumps(directory)
-        		fo.write(directory)
-        		fo.close()
-        		continue
-        # if agent not already written, we append it.
-        	fr = open("./cloudbook/local_IP_info.json", 'r')
-        	directory = json.load(fr)
-        	directory[my_agent_ID]={}
-        	directory[my_agent_ID]["IP"]=internal_ip
-        	fo = open("./cloudbook/local_IP_info.json", 'w')
-        	directory= json.dumps(directory)
-        	fo.write(directory)
-        	fo.close()
-        continue
+    	# Getting local IP
+    	internal_ip = get_local_ip()
+    	#Checking if file is empty, if so, write the IP directly.
+    	if (os.stat("./FS/local_IP_info.json").st_size==0):
+            fo = open("./FS/local_IP_info.json", 'w')
+            data={}
+            data[my_agent_ID]={}
+            data[my_agent_ID]={}
+            data[my_agent_ID]["IP"]=internal_ip+":"+str(port)
+            print (data)
+            json_data=json.dumps(data)
+            fo.write(json_data)
+            fo.close()
+    	# File not empty, so we open it to check if the agent has been already written on it.
+    	else:
+    		fr = open("./FS/local_IP_info.json", 'r')
+    		directory = json.load(fr)
+    		if my_agent_ID in directory:
+    			directory[my_agent_ID]["IP"]=internal_ip+":"+str(port)
+    			fo = open("./FS/local_IP_info.json", 'w')
+    			directory= json.dumps(directory)
+    			fo.write(directory)
+    			fo.close()
+    			continue
+    	# if agent not already written, we append it.
+    		fr = open("./FS/local_IP_info.json", 'r')
+    		directory = json.load(fr)
+    		directory[my_agent_ID]={}
+    		directory[my_agent_ID]["IP"]=internal_ip+":"+str(port)
+    		fo = open("./FS/local_IP_info.json", 'w')
+    		directory= json.dumps(directory)
+    		fo.write(directory)
+    		fo.close()
+    	continue
     time.sleep(60)
 
 
 #Get IP from a certain agent. It will be saved in a local variable.
 def getAgentIP(agent_id):
     #Check file "local_IP_info" and get agent_id
-		with open('./cloudbook/local_IP_info.json', 'r') as file:
+		with open('./FS/local_IP_info.json', 'r') as file:
 			data = json.load(file)
 			agents_ip[agent_id]={}
 			agents_ip[agent_id]=data[agent_id]

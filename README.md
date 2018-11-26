@@ -1,18 +1,12 @@
 # agent
 component in charge of execute deployable units
+Working only with Python 3.X
 
-to test:
-
-python agent.py -agentID <N>
+Format as tool (command usage):
+`python agent.py "AGENT_GRANT" "FS_PATH" "CIRCLE_ID`
 
 example:
-at machine 0
-python agent.py -agentID 0
 
-at machine 1
-python agent.py -agentID 1
-
-at machine 2
-python agent.py -agentID 2
+`python agent.py "HIGH" "./FS/" "DEFAULT_LOCAL_CIRCLE"`
 
 

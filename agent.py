@@ -35,10 +35,6 @@ LOCAL_MODE = False
 
 application = Flask(__name__)
 
-def set_local_mode(mode):
-	global LOCAL_MODE
-	LOCAL_MODE = mode
-
 @application.route("/", methods=['GET', 'PUT', 'POST'])
 def hello():
 	print ("hello world")
@@ -90,7 +86,7 @@ def invoke(invoked_function="none"):
 #def cosa(k):
 #	print k
 #	return "cloudbook"
-
+################################################ To be updated #######################################
 #def remote_invoke(invoked_du, invoked_function):
 def remote_invoke(invoked_function):
 	print ("ENTER in remote_invoke...")
@@ -146,18 +142,24 @@ if __name__ == "__main__":
 	#load config file
 	config_dict=loader.load_dictionary("./config_agent.json")
 
-	#PARAMS STILL NECESSARY?
 	#extract args and get the agent ID
-	# print ("Nume params: ", len(sys.argv))
-	# print ("List of args: ", sys.argv)
-	# i=0 # argument counter
-	# for arg in sys.argv:
-	# 	i=i+1
-	# 	if arg=="-agentID":
-	# 		my_agent_ID=sys.argv[i]
+	#py agent.py GRANT_LEVEL FS_PATH CIRCLE_NAME
+	print(sys.argv)
+	if(len(sys.argv) > 1):
 	
-	(my_agent_ID, my_circle_ID) = configure_agent.createAgentID()
-	configure_agent.setGrantLevel("LO QUE SEA", my_agent_ID)
+		LOCAL_MODE = True
+		config_dict["CIRCLE_ID"]=sys.argv[3]
+		loader.write_dictionary(config_dict, "./config_agent.json")
+		config_dict=loader.load_dictionary("./config_agent.json")
+		(my_agent_ID, my_circle_ID) = configure_agent.createAgentID()
+		configure_agent.setFSPath(sys.argv[2])
+		configure_agent.setGrantLevel(sys.argv[1], my_agent_ID)
+	else:
+		###THINGS FOR SERVICE_MODE#####
+		LOCAL_MODE = False
+		(my_agent_ID, my_circle_ID) = configure_agent.createAgentID()
+		#configure_agent.setGrantLevel("LO QUE SEA", my_agent_ID)
+
 
 	print ("my_agent_ID="+my_agent_ID)
 
@@ -166,12 +168,16 @@ if __name__ == "__main__":
 
 	#It will only contain info about agent_id : du_assigned (not IP)
 	#must be the output file from DEPLOYER
-	cloudbook_dict_agents = loader.load_dictionary('./du_files/cloudbook_agents.json')
-
+	#HERE WE MUST WAIT UNTIL THIS FILE EXISTS OR UPDATES: HOW TO DO THIS?
+	while(os.stat("./FS/cloudbook_agents.json").st_size==0):
+		continue
+	#Check file format :D
+	cloudbook_dict_agents = loader.load_cloudbook('./FS/cloudbook_agents.json')
+	
 	#Loads the DUs that belong to this agent.
 	du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
+	print(du_list)
     
-
 	#du_list=["du_0"] # fake
 	
 	j = du_list[0].rfind('_')+1
@@ -197,18 +203,18 @@ if __name__ == "__main__":
 	#exec("import du_0")
 	#du_0.invoker=cosa
 	# du_files is the distributed directory containing all DU files
-	for du in du_list:
-		exec ("from du_files import "+du)
-		#exec(du+".invoker=invoke")
-		exec(du+".invoker=remote_invoke")
+	#for du in du_list:
+	#	exec ("from du_files import "+du)
+	#	#exec(du+".invoker=invoke")
+	#	exec(du+".invoker=remote_invoke")
 		
 		#exec('du_0.invoker("du_0.hello()")')		
 	#du_0.main()
-	#application.run(debug=True, host='0.0.0.0', port = 3000+int(num_du))
+
 	log = logging.getLogger('werkzeug')
 	log.setLevel(logging.ERROR)
 	if (not LOCAL_MODE):
 		threading.Thread(target=publisher_frontend.announceAgent, args=(my_circle_ID, my_agent_ID)).start()
 	else:
-		threading.Thread(target=local_publisher.announceAgent, args=(my_circle_ID, my_agent_ID)).start()
-	application.run(debug=False, host=host,port=local_port,threaded=True)
+		threading.Thread(target=local_publisher.announceAgent, args=(my_circle_ID, my_agent_ID, local_port)).start()
+	application.run(debug=False, host="0.0.0.0",port=local_port,threaded=True)

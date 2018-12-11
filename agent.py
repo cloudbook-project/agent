@@ -41,7 +41,7 @@ def hello():
 	return  "Hello"
 
 @application.route("/invoke", methods=['GET','POST'])
-def invoke(invoked_function="none"):
+def invoke(invoked_function="none", configuration = None):
 	#Lo que llega es un json
 	#miramos el campo nombre de funcion, nombre del modulo de funcion, si existe en la du_list, la invocamos
 	#y si no, hay que invocar al agente que la contenga, consultando el cloudbook
@@ -88,7 +88,7 @@ def invoke(invoked_function="none"):
 #	return "cloudbook"
 ################################################ To be updated #######################################
 #def remote_invoke(invoked_du, invoked_function):
-def remote_invoke(invoked_function):
+def remote_invoke(invoked_function, configuration = None):
 	print ("ENTER in remote_invoke...")
 	# get the remote du 
 	j=invoked_function.find(".")

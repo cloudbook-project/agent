@@ -4,11 +4,11 @@ import urllib.request, json, time, socket, os #requires pip3 install urllib
 # agents_ip contains a list of the external IPs that this agent knows.
 agents_ip = {}
 
-def getAgentsCache():
+def getAgentsCache(configuration = None):
     return agents_ip
 
 
-def announceAgent(my_circle_ID, my_agent_ID, port):
+def announceAgent(my_circle_ID, my_agent_ID, port, configuration = None):
     while(True):
     	# Getting local IP
     	internal_ip = get_local_ip()
@@ -44,11 +44,11 @@ def announceAgent(my_circle_ID, my_agent_ID, port):
     		fo.write(directory)
     		fo.close()
     	continue
-    time.sleep(60)
+    time.sleep(300)
 
 
 #Get IP from a certain agent. It will be saved in a local variable.
-def getAgentIP(agent_id):
+def getAgentIP(agent_id, configuration = None):
     #Check file "local_IP_info" and get agent_id
 		with open('./FS/local_IP_info.json', 'r') as file:
 			data = json.load(file)
@@ -58,7 +58,7 @@ def getAgentIP(agent_id):
 		
 
 #Returns real local IP address, doesn't matter how many interfaces have been set.
-def get_local_ip():
+def get_local_ip(configuration = None):
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         # La IP que sea, no importa

@@ -80,7 +80,7 @@ def invoke(configuration = None):
 	print ("\n")
 	return resul
 
-def remote_invoke(invoked_du, invoked_function, invoked_data, configuration = None):
+def outgoing_invoke(invoked_du, invoked_function, invoked_data, configuration = None):
 	'''
 	This function is the one that calls the functions that do not belong to the agent's dus
 	This is because the exec(du+".invoker=remote_invoke") statement in the main process of every agent
@@ -213,7 +213,7 @@ if __name__ == "__main__":
 	# du_files is the distributed directory containing all DU files
 	for du in du_list:
 		exec ("from du_files import "+du)
-		exec(du+".invoker=remote_invoke")
+		exec(du+".invoker=outgoing_invoke")
 
 	log = logging.getLogger('werkzeug')
 	log.setLevel(logging.ERROR)

@@ -8,8 +8,8 @@ import json
 from flask import abort, redirect, url_for
 import loader, publisher_frontend, upnp, local_publisher, configure_agent
 import os, sys, time, threading, logging
-import urllib.request # this import requires pip3 install urllib
 from pynat import get_ip_info #requires pip3 install pynat
+import urllib # this import requires pip3 install urllib
 
 # agent_ID of this agent. this is a global var
 my_agent_ID="None"
@@ -41,101 +41,111 @@ def hello():
 	return  "Hello"
 
 @application.route("/invoke", methods=['GET','POST'])
-def invoke(invoked_function="none", configuration = None):
-	#Lo que llega es un json
-	#miramos el campo nombre de funcion, nombre del modulo de funcion, si existe en la du_list, la invocamos
-	#y si no, hay que invocar al agente que la contenga, consultando el cloudbook
-	#llamando al modulo invoker.py
+def invoke(configuration = None):
+	'''
+	This function receives petitions from other Agents or the run command
+	This function is invoked through http like this: http://138.4.7.151:3000/invoke?invoked_function=du_0.main
+	The invocation contains:
+		-GET: the invoked function
+		-POST: the invoked data
+	This function:
+		Gets the atributes invoked function and data
+		Gets the du and the function name
+		Evaluate the function if the du belong to the agent
+			Check: This always happens.
+		Returns the result of the evaluation
+	'''
+	print("=====AGENT: /INVOKE=====")
+	print(threading.get_ident())
 	
-	# example of invocation
-	# http://localhost:3000/invoke?invoked_function=compute(56,77,5)
-	
-	if invoked_function=="none":
-		invoked_function=request.args.get('invoked_function')
-		print ("external invocation")
-	else :
-		print ("internal invocation")
-
+	invoked_data = ""
+	print("REQUEST.form: ", request.form)
+	invoked_function=request.args.get('invoked_function')
+	for i in request.form:
+		invoked_data = i
+	print("INVOKED DATA: ", invoked_data)
 	print ("invoked_function = "+invoked_function)
-	# check if invoked function belongs to this agent, otherwise will re-invoke to the right agent
+
+	# separate du and function
 	j=invoked_function.find(".")
 	invoked_du= invoked_function[0:j]
 	print ("invoked_du ", invoked_du)
-
+	print("TEST: DU_LIST",du_list)
+	#if the function belongs to the agent
 	if invoked_du in du_list:
-		a= eval(invoked_function)
-		#supongamos que procesamos el post y llega esto
-		# invoked_function="main()"
-		#os.chdir('./du_files')
-		#exec("import du_0")
-		#return eval("du_0."+invoked_function)
-		#return eval("du_0."+"main("+"cosa"+")")
-		#a= eval("du_0."+"main()")
-		#if invoked_function belongs to this agent, then it can be evaluated
-		#a= eval(invoked_function)
+		resul = eval(invoked_function+"("+invoked_data+")")
 	else:
 		print ("this function does not belong to this agent")
-		a = "none" #remote_invoke(invoked_du, invoked_function)
-
-	#print "function executed ok"
-	#print a
+		resul = "none" #remote_invoke(invoked_du, invoked_function) Is this neccesary?
 	print ("\n")
-	#stdout.flush()
-	return a
+	return resul
 
-#def cosa(k):
-#	print k
-#	return "cloudbook"
-################################################ To be updated #######################################
-#def remote_invoke(invoked_du, invoked_function):
-def remote_invoke(invoked_function, configuration = None):
-	print ("ENTER in remote_invoke...")
-	# get the remote du 
-	j=invoked_function.find(".")
-	remote_du= invoked_function[0:j]
+def remote_invoke(invoked_du, invoked_function, invoked_data, configuration = None):
+	'''
+	This function is the one that calls the functions that do not belong to the agent's dus
+	This is because the exec(du+".invoker=remote_invoke") statement in the main process of every agent
+		being invoker an object generated in every du+
+	The invocation contains its variables in the invocation inside the du (example: invoker(['du_1'],'compute_body',str(i)+','+str(j)))
+	This function:
+		Gets the du to which the function belongs
+			If its in a du that belongs to the agent, it will resolv the function locally. Check: This never happens
+		Check the list of agents in order to get the agent to invoke (this could be many)
+		Build the call
+			Gets the host (TODO: Cache the ip)
+			Build the url (in order the invoke function from the other agent understands it: 
+				url='http://'+host+"/invoke?invoked_function="+chosen_du+"."+invoked_function)
+			Encode data (in the post of the https call)
+		Launch the request
+		Receive response
+			TODO: Test better the decoding of the response, actually makes a try except block diferenciating if the function response a
+				JSON object or other type like a string
+		The function returns the data received as response (That data is the resul of the invoke function in the other agent)
+	'''
+	print("=====AGENT: /REMOTE_INVOKE=====")
+	print(threading.get_ident())
+
+	remote_du = invoked_du[0] #TODO: Random between remote dus, if invoked fun is idempotent, it can result into multiple invocations
 	print ("remote du = ", remote_du)
 
 	if remote_du in du_list:
-		#this is not remote
-		print ("local invocation: ",invoked_function[j+1:])
-		res=eval(invoked_function[j+1:])
+		print ("local invocation: ",invoked_function)
+		res=eval(invoked_function)
 		return res
 
     # get the possible agents to invoke
 	list_agents=cloudbook_dict_agents.get(remote_du)
+	list_agents = list(list_agents)	
 
     # get the machines to invoke
 	remote_agent= list_agents[0] # several agents can have this remote DU. In order to test, get the first
 	print ("remote agent", remote_agent)
 
-	print ("cloudbook_dict_agents = ", cloudbook_dict_agents)
-
-	machine_dict=cloudbook_dict_agents.get(remote_agent)
-
-	print ("machine_dict ", machine_dict)
-
-	host =machine_dict.keys()[0]
-	print ("host to invoke is ", host)
-	"""
-	#remote port
-	j = remote_du.rfind('_')+1
-	# num_du is the initial DU and will be used as offset for listen port
-	num_remote_du = remote_du[j:]
-
-	#host="127.0.0.1:3001"
-	remote_port =3000+ int(num_remote_du)
-	host = host+":"+str (remote_port)
-	"""
-
-	url='http://'+host+"/invoke?invoked_function="+invoked_function
+	#host = remote ip+port
+	host = local_publisher.getAgentIP(remote_agent)
+	host = host["IP"]
+	print("TEST: HOST: ",host)
+	#TODO Cachear ips
+	
+	#lets choose the du from de list of dus passed
+	chosen_du = remote_du
+	url='http://'+host+"/invoke?invoked_function="+chosen_du+"."+invoked_function
 	print (url)
-	r = urllib.request.urlopen(url)
-	print ("request launched", url)
-	print (r.text)
-	print ("\n")
-	#stdout.flush()
-	return r.text
 
+	send_data = invoked_data.encode()
+	print("mandamos: ",send_data)
+	request_object = urllib.request.Request(url, send_data)
+	print ("request launched", url)
+	r = urllib.request.urlopen(request_object)
+	print ("response received")
+
+	try:#Para funciones que devuelven algo en json
+		data = r.read().decode()
+		aux = eval(data)
+	except:#Para otros tipos de datos
+		data = r.read()
+		aux = data
+
+	return aux
 
 if __name__ == "__main__":
 
@@ -154,6 +164,7 @@ if __name__ == "__main__":
 		(my_agent_ID, my_circle_ID) = configure_agent.createAgentID()
 		configure_agent.setFSPath(sys.argv[2])
 		configure_agent.setGrantLevel(sys.argv[1], my_agent_ID)
+		complete_path = sys.argv[2]
 	else:
 		###THINGS FOR SERVICE_MODE#####
 		LOCAL_MODE = False
@@ -169,10 +180,10 @@ if __name__ == "__main__":
 	#It will only contain info about agent_id : du_assigned (not IP)
 	#must be the output file from DEPLOYER
 	#HERE WE MUST WAIT UNTIL THIS FILE EXISTS OR UPDATES: HOW TO DO THIS?
-	while(os.stat("./FS/cloudbook_agents.json").st_size==0):
+	while(os.stat(complete_path+'/cloudbook_agents.json').st_size==0):
 		continue
 	#Check file format :D
-	cloudbook_dict_agents = loader.load_cloudbook('./FS/cloudbook_agents.json')
+	cloudbook_dict_agents = loader.load_cloudbook(complete_path+'/cloudbook_agents.json')
 	
 	#Loads the DUs that belong to this agent.
 	du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
@@ -199,17 +210,10 @@ if __name__ == "__main__":
 		while(upnp.openPort(local_port)):
 			continue
 
-	
-	#exec("import du_0")
-	#du_0.invoker=cosa
 	# du_files is the distributed directory containing all DU files
-	#for du in du_list:
-	#	exec ("from du_files import "+du)
-	#	#exec(du+".invoker=invoke")
-	#	exec(du+".invoker=remote_invoke")
-		
-		#exec('du_0.invoker("du_0.hello()")')		
-	#du_0.main()
+	for du in du_list:
+		exec ("from du_files import "+du)
+		exec(du+".invoker=remote_invoke")
 
 	log = logging.getLogger('werkzeug')
 	log.setLevel(logging.ERROR)

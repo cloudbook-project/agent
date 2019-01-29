@@ -37,4 +37,4 @@ def getAgentIP(my_circle_ID, agent_id, configuration = None):
 			agents_ip[agent_id]={}
 			agents_ip[agent_id]=ff
 			return agents_ip[agent_id]
-		return
+		

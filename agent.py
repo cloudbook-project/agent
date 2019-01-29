@@ -1,6 +1,3 @@
-#PENDING:
-# remote invoke, support new du_list, change cloudbook_agents by cloudbook_directory, support invocation labels
-
 from flask import Flask
 from flask import request
 from flask import jsonify
@@ -121,10 +118,11 @@ def remote_invoke(invoked_du, invoked_function, invoked_data, configuration = No
 	print ("remote agent", remote_agent)
 
 	#host = remote ip+port
+	
 	host = local_publisher.getAgentIP(remote_agent)
 	host = host["IP"]
 	print("TEST: HOST: ",host)
-	#TODO Cachear ips
+	#Cachear ips --> Done by default in both local publisher and publisher frontend.
 	
 	#lets choose the du from de list of dus passed
 	chosen_du = remote_du

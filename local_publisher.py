@@ -49,11 +49,15 @@ def announceAgent(my_circle_ID, my_agent_ID, port, configuration = None):
 
 #Get IP from a certain agent. It will be saved in a local variable.
 def getAgentIP(agent_id, configuration = None):
-    #Check file "local_IP_info" and get agent_id
+    #Check file "local_IP_info" and get agent_ip
+	if agent_id in agents_ip:
+		return agents_ip[agent_id]
+	else:	
 		with open('./FS/local_IP_info.json', 'r') as file:
 			data = json.load(file)
 			agents_ip[agent_id]={}
 			agents_ip[agent_id]=data[agent_id]
+			return agents_ip[agent_id]
 
 		
 

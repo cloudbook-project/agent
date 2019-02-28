@@ -213,6 +213,10 @@ if __name__ == "__main__":
 	local_port=3000+int(num_du)
 	print (host, local_port)
 
+	#get all dus
+	for i in cloudbook_dict_agents:
+		all_dus.append(i)
+
 	#Pending: check if previous port is closed.
 	if (not LOCAL_MODE):
 		while(upnp.openPort(local_port)):

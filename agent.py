@@ -29,6 +29,11 @@ config_dict={}
 #Global variable to define working mode
 LOCAL_MODE = False
 
+#All dus that contain the program
+all_dus=[]
+#index in order to make the round robin assignation of all_dus
+parallel_du_index = 0
+
 
 application = Flask(__name__)
 
@@ -103,6 +108,11 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, configuration = 
 
 	remote_du = invoked_du[0] #TODO: Random between remote dus, if invoked fun is idempotent, it can result into multiple invocations
 	print ("remote du = ", remote_du)
+	###Round Robin: Circular planification
+	if remote_du == 'du_10000':
+		#metemos las dus en una lista y hacemos un contador saturado sobre los indices de esa lista		
+		remote_du = all_dus[parallel_du_index]
+		parallel_du_index=(parallel_du_index+1) % len(all_dus)
 
 	if remote_du in du_list:
 		print ("local invocation: ",invoked_function)

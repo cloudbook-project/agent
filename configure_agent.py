@@ -6,6 +6,7 @@ def setFSPath(path):
 	#load config file
 	config_dict=loader.load_dictionary("./config_agent.json")
 	config_dict["DISTRIBUTED_FS"]=path
+	loader.write_dictionary(config_dict, "./config_agent.json")
 
 #Creates an agent ID in case it hasn't been created before, and writes it in configuration file
 def createAgentID():

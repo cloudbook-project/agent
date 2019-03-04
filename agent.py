@@ -116,8 +116,12 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, configuration = 
 
 	if remote_du in du_list:
 		print ("local invocation: ",invoked_function)
-		res=eval(invoked_function)
-		return res
+		print(invoked_du, invoked_function, invoked_data)
+		#res=eval(invoked_function)
+		print("Hago eval de: "+ invoked_du[0]+"."+invoked_function+"("+invoked_data+")")
+		res = eval(invoked_du[0]+"."+invoked_function+"("+invoked_data+")")
+		print("Responde: "+ res)
+		return eval(res)
 
     # get the possible agents to invoke
 	list_agents=cloudbook_dict_agents.get(remote_du)

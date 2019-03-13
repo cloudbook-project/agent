@@ -7,7 +7,6 @@ import threading
 invoker=None
 
 def f0():
-	invoker(['du_6'], 'f6',str(4))
 #Automated code for global var:
  #fun_name: main final fun name: f0 globalName: body_list destiny du: 1 global_fun_name: f1
 #============================global vars automatic code=========================
@@ -61,21 +60,17 @@ def f0():
 		#	global CONST_N#Aqui va el chorrazo de codigo
 	N = CONST_N
 	MAX_ITERATIONS = 10	
-	#invoker(['du_6'], 'f6',str(N))
+	invoker(['du_6'], 'f6',str(N))
 	for j in range(MAX_ITERATIONS):
 		print("starting iteration", j)
 		for i in body_list:
 			#__NONBLOCKING__
 			invoker(['du_10000'], 'f4',str(i)+','+ str(j))
 		#aux = body_list
-		print(body_list)
-		print(body_new)
-		invoker(['du_1'], 'f1','"f1.body_list%3d'+str(body_new)+' ", '+str(ver_body_list))#[0] = body_new
+		invoker(['du_1'], 'f1','"f1.body_list%3d'+str(body_new)+'" , '+str(ver_body_list))#[0] = body_new
 		f2('f2.body_new=[]', str(ver_body_new))# = []
 		print("iteration ", j, " executed")
 
-	print(body_list)
-	print(body_new)
 
 	return json.dumps('cloudbook: done') 
 

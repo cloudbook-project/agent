@@ -5,6 +5,7 @@ import json
 from flask import abort, redirect, url_for
 import loader, publisher_frontend, upnp, local_publisher, configure_agent
 import os, sys, time, threading, logging
+from multiprocessing import Process
 from pynat import get_ip_info #requires pip3 install pynat
 import urllib # this import requires pip3 install urllib
 
@@ -57,6 +58,9 @@ def invoke(configuration = None):
 			Check: This always happens.
 		Returns the result of the evaluation
 	'''
+	global du_list
+	global my_agent_ID
+
 	print("=====AGENT: /INVOKE=====")
 	print(threading.get_ident())
 	
@@ -71,6 +75,7 @@ def invoke(configuration = None):
 	# separate du and function
 	j=invoked_function.find(".")
 	invoked_du= invoked_function[0:j]
+	print("Yo soy", my_agent_ID)
 	print ("invoked_du ", invoked_du)
 	print("TEST: DU_LIST",du_list)
 	#if the function belongs to the agent
@@ -83,6 +88,7 @@ def invoke(configuration = None):
 	return resul
 
 def outgoing_invoke(invoked_du, invoked_function, invoked_data, configuration = None):
+	global parallel_du_index
 	'''
 	This function is the one that calls the functions that do not belong to the agent's dus
 	This is because the exec(du+".invoker=remote_invoke") statement in the main process of every agent
@@ -113,6 +119,8 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, configuration = 
 		#metemos las dus en una lista y hacemos un contador saturado sobre los indices de esa lista		
 		remote_du = all_dus[parallel_du_index]
 		parallel_du_index=(parallel_du_index+1) % len(all_dus)
+		invoked_du[0] = remote_du
+		print("Llamada a funcion parallel, la du afortunada sera: ", remote_du)
 
 	if remote_du in du_list:
 		print ("local invocation: ",invoked_function)
@@ -159,30 +167,16 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, configuration = 
 
 	return aux
 
-if __name__ == "__main__":
-
+#RUNS THE AGENT -> for the interface
+def run_LOCAL_agent(agent_id):
 	#load config file
-	config_dict=loader.load_dictionary("./config_agent.json")
+	config_dict=loader.load_dictionary("./config_agent"+agent_id+".json")
+	global my_agent_ID
+	global my_circle_ID
 
-	#extract args and get the agent ID
-	#py agent.py GRANT_LEVEL FS_PATH CIRCLE_NAME
-	print(sys.argv)
-	if(len(sys.argv) > 1):
-	
-		LOCAL_MODE = True
-		config_dict["CIRCLE_ID"]=sys.argv[3]
-		loader.write_dictionary(config_dict, "./config_agent.json")
-		config_dict=loader.load_dictionary("./config_agent.json")
-		(my_agent_ID, my_circle_ID) = configure_agent.createAgentID()
-		configure_agent.setFSPath(sys.argv[2])
-		configure_agent.setGrantLevel(sys.argv[1], my_agent_ID)
-		complete_path = sys.argv[2]
-	else:
-		###THINGS FOR SERVICE_MODE#####
-		LOCAL_MODE = False
-		(my_agent_ID, my_circle_ID) = configure_agent.createAgentID()
-		#configure_agent.setGrantLevel("LO QUE SEA", my_agent_ID)
-
+	my_agent_ID=config_dict["AGENT_ID"]
+	my_circle_ID=config_dict["CIRCLE_ID"]
+	complete_path=config_dict["DISTRIBUTED_FS"]
 
 	print ("my_agent_ID="+my_agent_ID)
 
@@ -195,22 +189,21 @@ if __name__ == "__main__":
 	while(os.stat(complete_path+'/cloudbook_agents.json').st_size==0):
 		continue
 	#Check file format :D
+	global cloudbook_dict_agents
 	cloudbook_dict_agents = loader.load_cloudbook(complete_path+'/cloudbook_agents.json')
 	
 	#Loads the DUs that belong to this agent.
+	global du_list
 	du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
-	print(du_list)
+	print("MI DU LIST", du_list)
     
 	#du_list=["du_0"] # fake
 	
 	j = du_list[0].rfind('_')+1
 	# num_du is the initial DU and will be used as offset for listen port
 	num_du = du_list[0][j:]
-	if (not LOCAL_MODE):
-		topology, external_ip, ext_port = get_ip_info()
-		host = external_ip
-	else:
-		host = local_publisher.get_local_ip()
+
+	host = local_publisher.get_local_ip()
 	print ("this host is ", host)
 
 	#Local port to be opened
@@ -218,23 +211,111 @@ if __name__ == "__main__":
 	print (host, local_port)
 
 	#get all dus
+	global all_dus
 	for i in cloudbook_dict_agents:
 		all_dus.append(i)
 
-	#Pending: check if previous port is closed.
-	if (not LOCAL_MODE):
-		while(upnp.openPort(local_port)):
-			continue
-
-	# du_files is the distributed directory containing all DU files
 	for du in du_list:
 		exec ("from du_files import "+du)
 		exec(du+".invoker=outgoing_invoke")
 
 	log = logging.getLogger('werkzeug')
 	log.setLevel(logging.ERROR)
-	if (not LOCAL_MODE):
-		threading.Thread(target=publisher_frontend.announceAgent, args=(my_circle_ID, my_agent_ID)).start()
-	else:
-		threading.Thread(target=local_publisher.announceAgent, args=(my_circle_ID, my_agent_ID, local_port)).start()
-	application.run(debug=False, host="0.0.0.0",port=local_port,threaded=True)
+	threading.Thread(target=local_publisher.announceAgent, args=(my_circle_ID, my_agent_ID, local_port)).start()
+	#Process(target=flaskThreaded, args=(local_port,)).start()
+	threading.Thread(target=flaskThreaded, args=[local_port]).start()
+	#flaskThreaded(local_port)
+	print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+	#prueba_interfaz.master.destroy()
+
+####PREGUNTAR######
+# CUANDO SE CREAN AGENTES SE COPIAN TODAS LAS CARPETAS O SOLO SE EDITAN LAS DEL FS Y EL CONFIG, TODAS EN EL MISMO SITIO??????
+def create_LOCAL_agent(grant, fs):
+	##generate default dict to be edited?????
+	configure_agent.generate_default_config()
+	config_dict=loader.load_dictionary("./config_agent.json")
+	config_dict["CIRCLE_ID"]="LOCAL"
+	loader.write_dictionary(config_dict, "./config_agent.json") #?????????????????
+	(my_agent_ID, my_circle_ID) = configure_agent.createAgentID()
+	configure_agent.setFSPath(fs)
+	configure_agent.setGrantLevel(grant, my_agent_ID)
+	os.rename("./config_agent.json", "./config_agent"+my_agent_ID+".json")
+
+def edit_agent(agent_id, grant='', fs=''):
+	
+	if(grant!=''):
+		configure_agent.editGrantLevel(grant, agent_id)
+	if(fs!=''):
+		configure_agent.editFSPath(fs, agent_id)
+	return
+
+#Mmmmmmm will it work? Nope, we just want to kill the associated agent
+def STOP():
+	sys.exit(0)
+
+def flaskThreaded(port):
+	port = int(port)
+	print("Voy a lanzar en", port)
+	application.run(debug=False, host="0.0.0.0",port=port,threaded=True)
+	print("00000000000000000000000000000000000000000000000000000000000000000000000000")
+
+if __name__ == "__main__":
+	print("Al lio")
+	#load config file
+	agent_id = sys.argv[1]
+	config_dict=loader.load_dictionary("./config_agent"+agent_id+".json")
+	#global my_agent_ID
+	#global my_circle_ID
+
+	my_agent_ID=config_dict["AGENT_ID"]
+	my_circle_ID=config_dict["CIRCLE_ID"]
+	complete_path=config_dict["DISTRIBUTED_FS"]
+
+	print ("my_agent_ID="+my_agent_ID)
+
+	print ("loading deployable units for agent "+my_agent_ID+"...")
+	#cloudbook_dict_agents = loader.load_cloudbook_agents()
+
+	#It will only contain info about agent_id : du_assigned (not IP)
+	#must be the output file from DEPLOYER
+	#HERE WE MUST WAIT UNTIL THIS FILE EXISTS OR UPDATES: HOW TO DO THIS?
+	while(os.stat(complete_path+'/cloudbook_agents.json').st_size==0):
+		continue
+	#Check file format :D
+	#global cloudbook_dict_agents
+	cloudbook_dict_agents = loader.load_cloudbook(complete_path+'/cloudbook_agents.json')
+	
+	#Loads the DUs that belong to this agent.
+	#global du_list
+	du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
+	print("MI DU LIST", du_list)
+    
+	#du_list=["du_0"] # fake
+	
+	j = du_list[0].rfind('_')+1
+	# num_du is the initial DU and will be used as offset for listen port
+	num_du = du_list[0][j:]
+
+	host = local_publisher.get_local_ip()
+	print ("this host is ", host)
+
+	#Local port to be opened
+	local_port=3000+int(num_du)
+	print (host, local_port)
+
+	#get all dus
+	#global all_dus
+	for i in cloudbook_dict_agents:
+		all_dus.append(i)
+
+	for du in du_list:
+		exec ("from du_files import "+du)
+		exec(du+".invoker=outgoing_invoke")
+
+	log = logging.getLogger('werkzeug')
+	log.setLevel(logging.ERROR)
+	threading.Thread(target=local_publisher.announceAgent, args=(my_circle_ID, my_agent_ID, local_port)).start()
+	#Process(target=flaskThreaded, args=(local_port,)).start()
+	threading.Thread(target=flaskThreaded, args=[local_port]).start()
+	#flaskThreaded(local_port)
+	print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")

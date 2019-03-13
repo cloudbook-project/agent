@@ -13,7 +13,7 @@ def announceAgent(my_circle_ID, my_agent_ID, port, configuration = None):
         # Getting local IP
     print("Announce Agent: ", my_agent_ID)
     internal_ip = get_local_ip()
-    config_dict = loader.load_dictionary("./config_agent.json")
+    config_dict = loader.load_dictionary("./config_agent"+my_agent_ID+".json")
     path = config_dict["DISTRIBUTED_FS"]
     print(path+"/local_IP_info.json")
     #Checking if file is empty, if so, write the IP directly.
@@ -54,7 +54,7 @@ def announceAgent(my_circle_ID, my_agent_ID, port, configuration = None):
 #Get IP from a certain agent. It will be saved in a local variable.
 def getAgentIP(agent_id, configuration = None):
     #Check file "local_IP_info" and get agent_id
-    config_dict = loader.load_dictionary("./config_agent.json")
+    config_dict = loader.load_dictionary("./config_agent"+agent_id+".json")
     path = config_dict["DISTRIBUTED_FS"]
     with open(path+'/local_IP_info.json', 'r') as file:
         data = json.load(file)

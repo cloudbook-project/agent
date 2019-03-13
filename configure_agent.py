@@ -2,6 +2,11 @@ import os, random, string, json
 import loader
 
 
+def editFSPath(path, my_agent_ID):
+	config_dict=loader.load_dictionary("./config_agent"+my_agent_ID+".json")
+	config_dict["DISTRIBUTED_FS"]=path
+	loader.write_dictionary(config_dict, "./config_agent"+my_agent_ID+".json")
+
 def setFSPath(path):
 	#load config file
 	config_dict=loader.load_dictionary("./config_agent.json")
@@ -21,6 +26,32 @@ def createAgentID():
 	my_circle_ID=config_dict["CIRCLE_ID"]
 	loader.write_dictionary(config_dict, "./config_agent.json")
 	return (my_agent_ID, my_circle_ID)
+
+
+#Edit Circle_ID --> to be completed when the circle manager is done
+def editCircleID(newCircleID, my_agent_ID):
+	#load config file
+	config_dict=loader.load_dictionary("./config_agent"+my_agent_ID+".json")
+	config_dict["CIRCLE_ID"]=newCircleID
+	loader.write_dictionary(config_dict, "./config_agent"+my_agent_ID+".json")
+
+
+
+#Edit grant level of this agent
+def editGrantLevel(level, my_agent_ID):
+	#load config file
+	config_dict=loader.load_dictionary("./config_agent"+my_agent_ID+".json")
+	if level in ("LOW", "MEDIUM", "HIGH"):
+		config_dict["GRANT_LEVEL"]=level
+		loader.write_dictionary(config_dict, "./config_agent"+my_agent_ID+".json")
+		fr = open("./FS/agent_grant.json", 'r')
+		directory = json.load(fr)
+		directory[my_agent_ID]=level
+		fo = open("./FS/agent_grant.json", 'w')
+		directory= json.dumps(directory)
+		fo.write(directory)
+		fo.close()
+		return
 
 
 #Sets grant level of this agent
@@ -61,3 +92,11 @@ def setGrantLevel(level, my_agent_ID):
 			fo.write(directory)
 			fo.close()
 		return
+
+def generate_default_config():
+	default={"AGENT_ID": "0", "DISTRIBUTED_FS": "", "CIRCLE_ID": "DEFAULT", "GRANT_LEVEL": ""}
+	fo = open("./config_agent.json", 'w+')
+	default=json.dumps(default)
+	fo.write(default)
+	fo.close()
+	return

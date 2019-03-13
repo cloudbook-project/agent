@@ -3,7 +3,7 @@ component in charge of execute deployable units
 Working only with Python 3.X  
 Requires (install with pip3): flask, pynat, urllib  
   
-Format as tool (command usage):  
+It contains a friendly GUI. It is developed to run in a local environment:  
 `python agent.py "AGENT_GRANT" "FS_PATH" CIRCLE_ID`  
 CIRCLE_ID Can be LOCAL  
 example:  

@@ -73,7 +73,8 @@ class Tab1 (ttk.Frame):
     def launch(self, r, c):
         text = agents_info[r-3]['AGENT_ID']
         print("Launching agent", text)
-        proc = subprocess.Popen("C:/Users/albercam/AppData/Local/Programs/Python/Python37-32/python.exe agent.py "+ text, shell=True ,creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+        proc = subprocess.Popen("python3 agent.py "+ text, shell=True ,creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+        #proc = subprocess.Popen("python3 agent.py "+ text, shell=True, preexec_fn=os.setsid)
         self.agent_pid_dict[text]=proc
         print("-------------------------------------------------------------------------")
         
@@ -83,6 +84,7 @@ class Tab1 (ttk.Frame):
         print("Stopping agent", text, self.agent_pid_dict[text])
         self.agent_pid_dict[text].send_signal(signal.CTRL_BREAK_EVENT)
         self.agent_pid_dict[text].kill()
+        #os.killpg(os.getpgid(self.agent_pid_dict[text].pid), signal.SIGTERM)
         del  self.agent_pid_dict[text]
         
 

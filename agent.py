@@ -132,6 +132,7 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, configuration = 
 		return eval(res)
 
     # get the possible agents to invoke
+	global my_agent_ID
 	list_agents=cloudbook_dict_agents.get(remote_du)
 	list_agents = list(list_agents)	
 
@@ -141,7 +142,7 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, configuration = 
 
 	#host = remote ip+port
 	
-	host = local_publisher.getAgentIP(remote_agent)
+	host = local_publisher.getAgentIP(my_agent_ID, remote_agent)
 	host = host["IP"]
 	print("TEST: HOST: ",host)
 	#Cachear ips --> Done by default in both local publisher and publisher frontend.
@@ -216,7 +217,7 @@ def run_LOCAL_agent(agent_id):
 		all_dus.append(i)
 
 	for du in du_list:
-		exec ("from du_files import "+du)
+		exec ("from FS/du_files import "+du)
 		exec(du+".invoker=outgoing_invoke")
 
 	log = logging.getLogger('werkzeug')
@@ -308,6 +309,7 @@ if __name__ == "__main__":
 	for i in cloudbook_dict_agents:
 		all_dus.append(i)
 
+	sys.path.append(complete_path)
 	for du in du_list:
 		exec ("from du_files import "+du)
 		exec(du+".invoker=outgoing_invoke")

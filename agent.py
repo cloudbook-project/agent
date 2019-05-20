@@ -3,8 +3,8 @@ from flask import request
 from flask import jsonify
 import json
 from flask import abort, redirect, url_for
-import loader, publisher_frontend, upnp, local_publisher, configure_agent
-import os, sys, time, threading, logging
+import loader, upnp, publisher_frontend, local_publisher, configure_agent
+import os, sys, time, threading, logging, platform
 from multiprocessing import Process
 from pynat import get_ip_info #requires pip3 install pynat
 import urllib # this import requires pip3 install urllib
@@ -168,79 +168,30 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, configuration = 
 
 	return aux
 
-#RUNS THE AGENT -> for the interface
-def run_LOCAL_agent(agent_id):
-	#load config file
-	config_dict=loader.load_dictionary("./config_agent"+agent_id+".json")
-	global my_agent_ID
-	global my_circle_ID
 
-	my_agent_ID=config_dict["AGENT_ID"]
-	my_circle_ID=config_dict["CIRCLE_ID"]
-	complete_path=config_dict["DISTRIBUTED_FS"]
-
-	print ("my_agent_ID="+my_agent_ID)
-
-	print ("loading deployable units for agent "+my_agent_ID+"...")
-	#cloudbook_dict_agents = loader.load_cloudbook_agents()
-
-	#It will only contain info about agent_id : du_assigned (not IP)
-	#must be the output file from DEPLOYER
-	#HERE WE MUST WAIT UNTIL THIS FILE EXISTS OR UPDATES: HOW TO DO THIS?
-	while(os.stat(complete_path+'/cloudbook_agents.json').st_size==0):
-		continue
-	#Check file format :D
-	global cloudbook_dict_agents
-	cloudbook_dict_agents = loader.load_cloudbook(complete_path+'/cloudbook_agents.json')
-	
-	#Loads the DUs that belong to this agent.
-	global du_list
-	du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
-	print("MI DU LIST", du_list)
-    
-	#du_list=["du_0"] # fake
-	
-	j = du_list[0].rfind('_')+1
-	# num_du is the initial DU and will be used as offset for listen port
-	num_du = du_list[0][j:]
-
-	host = local_publisher.get_local_ip()
-	print ("this host is ", host)
-
-	#Local port to be opened
-	local_port=3000+int(num_du)
-	print (host, local_port)
-
-	#get all dus
-	global all_dus
-	for i in cloudbook_dict_agents:
-		all_dus.append(i)
-
-	for du in du_list:
-		exec ("from FS/du_files import "+du)
-		exec(du+".invoker=outgoing_invoke")
-
-	log = logging.getLogger('werkzeug')
-	log.setLevel(logging.ERROR)
-	threading.Thread(target=local_publisher.announceAgent, args=(my_circle_ID, my_agent_ID, local_port)).start()
-	#Process(target=flaskThreaded, args=(local_port,)).start()
-	threading.Thread(target=flaskThreaded, args=[local_port]).start()
-	#flaskThreaded(local_port)
-	print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-	#prueba_interfaz.master.destroy()
-
-####PREGUNTAR######
-# CUANDO SE CREAN AGENTES SE COPIAN TODAS LAS CARPETAS O SOLO SE EDITAN LAS DEL FS Y EL CONFIG, TODAS EN EL MISMO SITIO??????
-def create_LOCAL_agent(grant, fs):
+def create_LOCAL_agent(grant, fs=False):
 	##generate default dict to be edited?????
+	if(platform.system()=="Windows"):
+		path= os.environ['HOMEDRIVE'] + os.environ['HOMEPATH']+"/cloudbook"
+		if not os.path.exists(path):
+			os.makedirs(path)
+	else:
+		fs = "/etc/cloudbook"
+		if not os.path.exists(path):
+			os.makedirs(path)
+	if not fs:
+		fs = path+"/distributed"
 	configure_agent.generate_default_config()
-	config_dict=loader.load_dictionary("./config_agent.json")
+	config_dict=loader.load_dictionary(path+"/config/config_agent.json")
 	config_dict["CIRCLE_ID"]="LOCAL"
-	loader.write_dictionary(config_dict, "./config_agent.json") #?????????????????
+	loader.write_dictionary(config_dict, path+"/config/config_agent.json")
 	(my_agent_ID, my_circle_ID) = configure_agent.createAgentID()
+	print("Caca",my_agent_ID)
 	configure_agent.setFSPath(fs)
+	print("Recaca, fs hecho")
 	configure_agent.setGrantLevel(grant, my_agent_ID)
-	os.rename("./config_agent.json", "./config_agent"+my_agent_ID+".json")
+	print("Vamos a renombrar")
+	os.rename(path+"/config/config_agent.json", path+"/config/config_agent"+my_agent_ID+".json")
 
 def edit_agent(agent_id, grant='', fs=''):
 	
@@ -250,9 +201,6 @@ def edit_agent(agent_id, grant='', fs=''):
 		configure_agent.editFSPath(fs, agent_id)
 	return
 
-#Mmmmmmm will it work? Nope, we just want to kill the associated agent
-def STOP():
-	sys.exit(0)
 
 def flaskThreaded(port):
 	port = int(port)
@@ -262,17 +210,21 @@ def flaskThreaded(port):
 
 if __name__ == "__main__":
 	print("Al lio")
+	
+	if(platform.system()=="Windows"):
+		fs= os.environ['HOMEDRIVE'] + os.environ['HOMEPATH']+os.sep+"cloudbook"
+	else:
+		fs = "/etc/cloudbook"
 	#load config file
 	agent_id = sys.argv[1]
-	config_dict=loader.load_dictionary("./config_agent"+agent_id+".json")
+	config_dict=loader.load_dictionary(fs+"/config/config_agent"+agent_id+".json")
 	#global my_agent_ID
 	#global my_circle_ID
 
 	my_agent_ID=config_dict["AGENT_ID"]
 	my_circle_ID=config_dict["CIRCLE_ID"]
-	complete_path=config_dict["DISTRIBUTED_FS"]
+	fs_path=config_dict["DISTRIBUTED_FS"]
 	my_grant = config_dict["GRANT_LEVEL"]
-	configure_agent.setGrantLevel(my_grant, my_agent_ID)
 
 	print ("my_agent_ID="+my_agent_ID)
 
@@ -282,14 +234,14 @@ if __name__ == "__main__":
 	#It will only contain info about agent_id : du_assigned (not IP)
 	#must be the output file from DEPLOYER
 	#HERE WE MUST WAIT UNTIL THIS FILE EXISTS OR UPDATES: HOW TO DO THIS?
-	while not os.path.exists(complete_path+'/cloudbook_agents.json'):
+	while not os.path.exists(fs_path+'/cloudbook.json'):
 			time.sleep(1)
 
-	while(os.stat(complete_path+'/cloudbook_agents.json').st_size==0):
+	while(os.stat(fs_path+'/cloudbook.json').st_size==0):
 		continue
 	#Check file format :D
 	#global cloudbook_dict_agents
-	cloudbook_dict_agents = loader.load_cloudbook(complete_path+'/cloudbook_agents.json')
+	cloudbook_dict_agents = loader.load_cloudbook(fs_path+'/cloudbook.json')
 	
 	#Loads the DUs that belong to this agent.
 	#global du_list
@@ -314,18 +266,22 @@ if __name__ == "__main__":
 	for i in cloudbook_dict_agents:
 		all_dus.append(i)
 
-	sys.path.append(complete_path)
+	sys.path.append(fs_path)
 	'''for du in du_list:
 		exec ("from du_files import "+du)
 		exec(du+".invoker=outgoing_invoke")'''
 
 	for du in du_list:
-		while not os.path.exists("./FS/du_files/"+du+".py"):
+		print(du)
+		while not os.path.exists(fs_path+"/du_files/"+du+".py"):
 			time.sleep(0.1)
-
-		if os.path.isfile("./FS/du_files/"+du+".py"):
-			exec ("from FS.du_files import "+du)
-			exec(du+".invoker=outgoing_invoke")# read file
+		##OJO CON ESTO QUE HAY QUE PROBARLO BIEN BIEN
+		
+		ruta = fs_path.replace(os.sep, "/")
+		ruta = ruta + "/du_files"
+		exec('sys.path.append('+"'"+ruta+"'"+')')
+		exec ("from du_files import "+du)
+		exec(du+".invoker=outgoing_invoke")# read file
 		print(du+" charged")
 
 	log = logging.getLogger('werkzeug')

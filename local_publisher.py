@@ -1,5 +1,5 @@
 from pynat import get_ip_info #requires pip3 install pynat
-import urllib.request, json, time, socket, os, loader #requires pip3 install urllib
+import urllib.request, json, time, socket, platform, os, loader #requires pip3 install urllib
 
 # agents_ip contains a list of the external IPs that this agent knows.
 agents_ip = {}
@@ -9,12 +9,23 @@ def getAgentsCache(configuration = None):
 
 
 def announceAgent(my_circle_ID, my_agent_ID, port, configuration = None):
+    
+    if(platform.system()=="Windows"):
+        fs= os.environ['HOMEDRIVE'] + os.environ['HOMEPATH']+"/cloudbook"
+        if not os.path.exists(fs):
+            os.makedirs(fs)
+    else:
+        fs = "/etc/cloudbook"
+        if not os.path.exists(fs):
+            os.makedirs(fs)
+	#load config file
+    config_dict=loader.load_dictionary(fs+"/config/config_agent"+my_agent_ID+".json")
+    path = config_dict["DISTRIBUTED_FS"]
+    
     #while(True):
         # Getting local IP
     print("Announce Agent: ", my_agent_ID)
     internal_ip = get_local_ip()
-    config_dict = loader.load_dictionary("./config_agent"+my_agent_ID+".json")
-    path = config_dict["DISTRIBUTED_FS"]
     print(path+"/local_IP_info.json")
     #Checking if file is empty, if so, write the IP directly.
     if not os.path.exists(path+"/local_IP_info.json"):
@@ -57,7 +68,16 @@ def announceAgent(my_circle_ID, my_agent_ID, port, configuration = None):
 #Get IP from a certain agent. It will be saved in a local variable.
 def getAgentIP(my_agent_id, agent_id, configuration = None):
     #Check file "local_IP_info" and get agent_id
-    config_dict = loader.load_dictionary("./config_agent"+my_agent_id+".json")
+    if(platform.system()=="Windows"):
+        fs= os.environ['HOMEDRIVE'] + os.environ['HOMEPATH']+"/cloudbook"
+        if not os.path.exists(fs):
+            os.makedirs(fs)
+    else:
+        fs = "/etc/cloudbook"
+        if not os.path.exists(fs):
+            os.makedirs(fs)
+	#load config file
+    config_dict=loader.load_dictionary(fs+"/config/config_agent"+my_agent_id+".json")
     path = config_dict["DISTRIBUTED_FS"]
     with open(path+'/local_IP_info.json', 'r') as file:
         data = json.load(file)

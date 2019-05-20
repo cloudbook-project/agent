@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog
 import os, json
-import subprocess, sys, os, signal
+import subprocess, sys, os, signal, platform
 
 import agent
 
@@ -16,13 +16,20 @@ import agent
 
 agents_info = {}
 def get_info():
-    path = './'
+    if(platform.system()=="Windows"):
+        path= os.environ['HOMEDRIVE'] + os.environ['HOMEPATH']+"/cloudbook/config/"
+        if not os.path.exists(path):
+            os.makedirs(path)
+    else:
+        path = "/etc/cloudbook/"
+        if not os.path.exists(path):
+            os.makedirs(path)
     files = [i for i in os.listdir(path) if os.path.isfile(os.path.join(path,i)) and \
              'config_agent' in i]
 
     my_agents_info={}
     for file in files:
-        with open("./"+file, 'r') as config:
+        with open(path+file, 'r') as config:
             my_agents_info[files.index(file)]=json.load(config)
     global agents_info
     agents_info=my_agents_info
@@ -83,9 +90,11 @@ class Tab1 (ttk.Frame):
     def stop(self, r, c):
         text = agents_info[r-3]['AGENT_ID']
         print("Stopping agent", text, self.agent_pid_dict[text])
-        self.agent_pid_dict[text].send_signal(signal.CTRL_BREAK_EVENT)
-        #self.agent_pid_dict[text].kill()
-        #os.killpg(os.getpgid(self.agent_pid_dict[text].pid), signal.SIGTERM)
+        if(platform.system()=="Windows"):
+            self.agent_pid_dict[text].send_signal(signal.CTRL_BREAK_EVENT)
+            self.agent_pid_dict[text].kill()
+        else:
+            os.killpg(os.getpgid(self.agent_pid_dict[text].pid), signal.SIGTERM)
         del  self.agent_pid_dict[text]
         
 
@@ -281,9 +290,6 @@ class Application(ttk.Frame):
 
         self.notebook.pack(expand=True, fill="both")
         self.pack(expand=True, fill="both")
-
-   
-
 
 
 get_info()

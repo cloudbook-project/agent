@@ -89,10 +89,10 @@ def editGrantLevel(level, my_agent_ID):
 	if level in ("LOW", "MEDIUM", "HIGH"):
 		config_dict["GRANT_LEVEL"]=level
 		loader.write_dictionary(config_dict, fs+"/config/config_agent"+my_agent_ID+".json")
-		fr = open(path+"/agent_grant.json", 'r')
+		fr = open(path+"/agents_grant.json", 'r')
 		directory = json.load(fr)
 		directory[my_agent_ID]=level
-		fo = open(path+"/agent_grant.json", 'w')
+		fo = open(path+"/agents_grant.json", 'w')
 		directory= json.dumps(directory)
 		fo.write(directory)
 		fo.close()

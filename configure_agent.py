@@ -116,11 +116,11 @@ def setGrantLevel(level, my_agent_ID):
 		config_dict["GRANT_LEVEL"]=level
 		#Config has been set, now, lets write it in agents_grant.json
 		#Checking if file is empty, if so, write the IP directly.
-		while not os.path.exists(fs+"/distributed/agent_grant.json"):
-			fo = open(path+"/agent_grant.json", 'w')
+		while not os.path.exists(fs+"/distributed/agents_grant.json"):
+			fo = open(path+"/agents_grant.json", 'w')
 			fo.close()
-		if os.stat(path+"/agent_grant.json").st_size==0:
-			fo = open(path+"/agent_grant.json", 'w')
+		if os.stat(path+"/agents_grant.json").st_size==0:
+			fo = open(path+"/agents_grant.json", 'w')
 			data={}
 			data[my_agent_ID]={}
 			data[my_agent_ID]={}
@@ -130,21 +130,21 @@ def setGrantLevel(level, my_agent_ID):
 			fo.close()
 		# File not empty, so we open it to check if the agent has been already written on it.
 		else:
-			fr = open(path+"/agent_grant.json", 'r')
+			fr = open(path+"/agents_grant.json", 'r')
 			directory = json.load(fr)
 			if my_agent_ID in directory:
 				directory[my_agent_ID]=level
-				fo = open(path+"/agent_grant.json", 'w')
+				fo = open(path+"/agents_grant.json", 'w')
 				directory= json.dumps(directory)
 				fo.write(directory)
 				fo.close()
 				return
 		# if agent not already written, we append it.
-			fr = open(path+"/agent_grant.json", 'r')
+			fr = open(path+"/agents_grant.json", 'r')
 			directory = json.load(fr)
 			directory[my_agent_ID]={}
 			directory[my_agent_ID]=level
-			fo = open(path+"/agent_grant.json", 'w')
+			fo = open(path+"/agents_grant.json", 'w')
 			directory= json.dumps(directory)
 			fo.write(directory)
 			fo.close()

@@ -1,7 +1,8 @@
 import os, random, string, json, platform
 import loader
 
-
+#This function edits the filesystem path of an existing agent. It is used by the agent.
+#It receives the new filesystem path and the agent ID to edit. It edits the configuration file of the given agent.
 def editFSPath(path, my_agent_ID):
 	#load config file
 	if(platform.system()=="Windows"):
@@ -16,6 +17,9 @@ def editFSPath(path, my_agent_ID):
 	config_dict["DISTRIBUTED_FS"]=path
 	loader.write_dictionary(config_dict, fs+"/config/config_agent"+my_agent_ID+".json")
 
+
+#This function sets the filesystem path of a new agent. It is used by the agent when creating a new one.
+#It receives the filesystem path to use and edits the auto-generated configuration file that will be for that agent.
 def setFSPath(path):
 	#load config file
 	if(platform.system()=="Windows"):
@@ -30,6 +34,7 @@ def setFSPath(path):
 	config_dict=loader.load_dictionary(fs+"/config/config_agent.json")
 	config_dict["DISTRIBUTED_FS"]=path
 	loader.write_dictionary(config_dict, fs+"/config/config_agent.json")
+
 
 #Creates an agent ID in case it hasn't been created before, and writes it in configuration file
 def createAgentID():
@@ -55,7 +60,7 @@ def createAgentID():
 	return (my_agent_ID, my_circle_ID)
 
 
-#Edit Circle_ID --> to be completed when the circle manager is done
+#Edit Circle_ID --> TODO: complete when the circle manager is done
 def editCircleID(newCircleID, my_agent_ID):
 	#load config file
 	if(platform.system()=="Windows"):
@@ -73,7 +78,8 @@ def editCircleID(newCircleID, my_agent_ID):
 
 
 
-#Edit grant level of this agent
+#This function edits the grant of a certain agent. It is used by the agent.
+#It receives the new agent grant level and the ID of the agent to edit and rewrites the configuration file.
 def editGrantLevel(level, my_agent_ID):
 	#load config file
 	if(platform.system()=="Windows"):
@@ -99,7 +105,8 @@ def editGrantLevel(level, my_agent_ID):
 		return
 
 
-#Sets grant level of this agent
+#This function sets the grant of a new agent. It is used by the agent when creating a new one.
+#It receives the grant level of the agent and edits the auto-generated configuration file that will be for that agent.
 def setGrantLevel(level, my_agent_ID):
 	if(platform.system()=="Windows"):
 		fs= os.environ['HOMEDRIVE'] + os.environ['HOMEPATH']+"/cloudbook"
@@ -150,6 +157,8 @@ def setGrantLevel(level, my_agent_ID):
 			fo.close()
 		return
 
+#This function auto-generates the configuration file when creating a new agent. 
+#It uses default configuration that will be changed if needed.
 def generate_default_config():
 	if(platform.system()=="Windows"):
 		fs= os.environ['HOMEDRIVE'] + os.environ['HOMEPATH']+"/cloudbook"

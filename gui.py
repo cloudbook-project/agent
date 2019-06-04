@@ -14,6 +14,8 @@ import agent
 # With the information given before, create a tab ONLY for the main agent giving information about the circle
 #   -> Information from local_ip_publisher and circle_info?
 
+#This functions recovers the information about the different agents using their configuration files.
+#Then the information is saved on a variable that will be used later.
 agents_info = {}
 def get_info():
     if(platform.system()=="Windows"):
@@ -35,11 +37,13 @@ def get_info():
     agents_info=my_agents_info
     print(agents_info)
 
-
+#This is the first type of tab. It includes all the information related to the different agents that live in the machine.
+#It provides with "launch" and "stop" buttons. The information about the different agents is readed from the get_info() function.
 class Tab1 (ttk.Frame):
 
     agent_pid_dict = {}
 
+    #Builds the layout and fills it.
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -77,6 +81,7 @@ class Tab1 (ttk.Frame):
                         self.cell.grid(row=i+2, column=j)
 
 
+    #Functionality of the "Launch" button
     def launch(self, r, c):
         text = agents_info[r-3]['AGENT_ID']
         print("Launching agent", text)
@@ -86,7 +91,7 @@ class Tab1 (ttk.Frame):
         self.agent_pid_dict[text]=proc
         print("-------------------------------------------------------------------------")
         
-    
+    #Functionality of the "Stop" button.
     def stop(self, r, c):
         text = agents_info[r-3]['AGENT_ID']
         print("Stopping agent", text, self.agent_pid_dict[text])
@@ -98,7 +103,8 @@ class Tab1 (ttk.Frame):
         del  self.agent_pid_dict[text]
         
 
-
+#This tab is the one including the information to create a new agent.
+#Some fields are disabled since they are not supported yet.
 class Tab2(ttk.Frame):
     
     def __init__(self, *args, **kwargs):
@@ -140,11 +146,12 @@ class Tab2(ttk.Frame):
         self.create_circle.grid(column=3, row=8)
         #self.attach_circle.grid(column=3, row=7)
 
-    
+    #Functionality for set button
     def buttonset(self):
         user_input=self.circle_entry.get()
         print(user_input)
 
+    #Functionality for grant switch-case
     def set_grant(self):
         def switch(index):
             switcher = {
@@ -152,7 +159,7 @@ class Tab2(ttk.Frame):
                 1: "MEDIUM",
                 2: "LOW"
             }  
-            return switcher.get(index, "No se ha seleccionado nada")
+            return switcher.get(index, "No option selected")
         print("Se ha seleccionado: " + switch(self.grant_combo.current()) )
     
     def switch(self, index):
@@ -163,6 +170,8 @@ class Tab2(ttk.Frame):
             }  
             return switcher.get(index, "No se ha seleccionado nada")
     
+    #Functionality for create button. Recovers the already set information and
+    #calls the create_local_agent function located in the agent.py software.
     def create(self):
         print("Pulsado crear")
         grant = self.switch(self.grant_combo.current())
@@ -172,18 +181,24 @@ class Tab2(ttk.Frame):
 
         agent.create_LOCAL_agent(grant, fspath)
     
-    
+    #This button launches a new gui to select the folder for the FS path.
+    #This parameter is optional.
     def browse_button(self):
         filename = filedialog.askdirectory()
         self.fspath["state"]=(tk.NORMAL)
         self.fspath.insert(0,filename)
         self.fspath["state"]=("readonly")
         print(filename)
-        
+
+
+# New tab reserved for future use.
 class Tab3(ttk.Frame):
     def __init__(self, *args, var):
         super().__init__(*args)
 
+# Tab that contains the information of a specific agent located in the machine.
+# It algo provides functionality to edit its parameters such as the FS, or the grant.
+# It contains disabled functions because its functionality will be included in the future.
 class TabX(ttk.Frame):
 
     agent = []
@@ -218,10 +233,13 @@ class TabX(ttk.Frame):
         self.bwButton.grid(column=8, row=5)
 
 
+    #To be added when the functionality is implemented.
     def edit_circle_id(self):
     
         print("En el campo pone: " +self.texto.get()+" del agente " + self.agent['AGENT_ID'])
 
+    #Functionality to edit the agent grant. It calls to the "edit_agent()" function in the 
+    # agent software.
     def set_grant(self):
         def switch(index):
             switcher = {
@@ -233,7 +251,7 @@ class TabX(ttk.Frame):
         print("Se ha seleccionado: " + switch(self.combo.current())+" del agente " + self.agent['AGENT_ID'])
         agent.edit_agent(self.agent['AGENT_ID'], grant=switch(self.combo.current()))
         
-
+    #This button launches a new gui to select another folder for the FS path. 
     def browse_button(self):
         filename = filedialog.askdirectory()
         self.fspath["state"]=(tk.NORMAL)
@@ -243,9 +261,11 @@ class TabX(ttk.Frame):
         agent.edit_agent(self.agent['AGENT_ID'], fs=filename)
         
 
-
+#Class to build the general framework of the GUI.
+#Inside this object, the different tabs are constructed. It also includes de "Refresh" button.
 class Application(ttk.Frame):
 
+    #The different tabs are initialized.
     def __init__(self, master):
         super().__init__(master)
         master.title("CloudBook Agent GUI")
@@ -265,10 +285,12 @@ class Application(ttk.Frame):
             self.notebook.add(
                 globals()['self.'+str(info)], text="Agent "+ str(info), padding=10)
 
+        #Refresh button created
         tk.Button(self, text="Refresh", command=self.refresh).pack()
         self.notebook.pack(expand=True, fill="both")
         self.pack(expand=True, fill="both")
     
+    #Functionality for refresh button. Basically it rebuilds the framework.
     def refresh(self):
         get_info()
         self.tab1.destroy()
@@ -292,6 +314,7 @@ class Application(ttk.Frame):
         self.pack(expand=True, fill="both")
 
 
+#Start application
 get_info()
 master = tk.Tk()
 app = Application(master)

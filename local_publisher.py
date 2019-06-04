@@ -4,10 +4,12 @@ import urllib.request, json, time, socket, platform, os, loader #requires pip3 i
 # agents_ip contains a list of the external IPs that this agent knows.
 agents_ip = {}
 
+#Caché including relation between agents and IPs
 def getAgentsCache(configuration = None):
     return agents_ip
 
-
+#This function is very important.
+#It announces the IP address of the agent and writes it in the local_ip_info.json to be consulted by the rest of the agents.
 def announceAgent(my_circle_ID, my_agent_ID, port, configuration = None):
     
     if(platform.system()=="Windows"):
@@ -66,6 +68,7 @@ def announceAgent(my_circle_ID, my_agent_ID, port, configuration = None):
 
 
 #Get IP from a certain agent. It will be saved in a local variable.
+#It is used to call remote dus by the remote_invoke()
 def getAgentIP(my_agent_id, agent_id, configuration = None):
     #Check file "local_IP_info" and get agent_id
     if(platform.system()=="Windows"):

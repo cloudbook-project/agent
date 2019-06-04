@@ -168,9 +168,10 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, configuration = 
 
 	return aux
 
-
+#This function is used by the GUI. With the grant level selected and the FS (if provided) it generates a new agent
+#Checks the OS to adapt the folders' distribution to it.
+#Generates a default configuration file that is edited and adapted afterwards.
 def create_LOCAL_agent(grant, fs=False):
-	##generate default dict to be edited?????
 	if(platform.system()=="Windows"):
 		path= os.environ['HOMEDRIVE'] + os.environ['HOMEPATH']+"/cloudbook"
 		if not os.path.exists(path):
@@ -193,23 +194,24 @@ def create_LOCAL_agent(grant, fs=False):
 	print("Vamos a renombrar")
 	os.rename(path+"/config/config_agent.json", path+"/config/config_agent"+my_agent_ID+".json")
 
+
+#This function is used by the GUI. With the grant level selected and/or the FS it edits an existing agent.
 def edit_agent(agent_id, grant='', fs=''):
-	
 	if(grant!=''):
 		configure_agent.editGrantLevel(grant, agent_id)
 	if(fs!=''):
 		configure_agent.editFSPath(fs, agent_id)
 	return
 
-
+#This functions launches the flask server.
 def flaskThreaded(port):
 	port = int(port)
-	print("Voy a lanzar en", port)
+	print("Launched in port:", port)
 	application.run(debug=False, host="0.0.0.0",port=port,threaded=True)
 	print("00000000000000000000000000000000000000000000000000000000000000000000000000")
 
 if __name__ == "__main__":
-	print("Al lio")
+	print("Starting agent...")
 	
 	if(platform.system()=="Windows"):
 		fs= os.environ['HOMEDRIVE'] + os.environ['HOMEPATH']+os.sep+"cloudbook"
@@ -233,7 +235,7 @@ if __name__ == "__main__":
 
 	#It will only contain info about agent_id : du_assigned (not IP)
 	#must be the output file from DEPLOYER
-	#HERE WE MUST WAIT UNTIL THIS FILE EXISTS OR UPDATES: HOW TO DO THIS?
+	#HERE WE MUST WAIT UNTIL THIS FILE EXISTS OR UPDATES
 	while not os.path.exists(fs_path+'/cloudbook.json'):
 			time.sleep(1)
 

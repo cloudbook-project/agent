@@ -49,8 +49,11 @@ def createAgentID():
 			os.makedirs(fs)
 	#load config file
 	config_dict=loader.load_dictionary(fs+"/config/config_agent.json")
-    #Random agent_id if it doesn't exist
-	my_agent_ID= ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20))
+	if(os.path.isfile(fs+"/distributed/agents_grant.json")):
+    	#Random agent_id if it doesn't exist
+		my_agent_ID= ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20))
+	else:
+		my_agent_ID="agent_0"
 	if config_dict["AGENT_ID"]=="0":
 		config_dict["AGENT_ID"]=my_agent_ID
 	else:

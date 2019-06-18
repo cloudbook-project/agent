@@ -122,6 +122,13 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, configuration = 
 		invoked_du[0] = remote_du
 		print("Llamada a funcion parallel, la du afortunada sera: ", remote_du)
 
+	if remote_du == 'du_5000':
+		#metemos las dus en una lista y hacemos un contador saturado sobre los indices de esa lista		
+		remote_du = all_dus[parallel_du_index]
+		parallel_du_index=(parallel_du_index+1) % len(all_dus)
+		invoked_du[0] = remote_du
+		print("Llamada a funcion recursiva, la du afortunada sera: ", remote_du)
+
 	if remote_du in du_list:
 		print ("local invocation: ",invoked_function)
 		print(invoked_du, invoked_function, invoked_data)

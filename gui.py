@@ -23,7 +23,7 @@ def get_info():
         if not os.path.exists(path):
             os.makedirs(path)
     else:
-        path = "/etc/cloudbook/"
+        path = "/etc/cloudbook/config/"
         if not os.path.exists(path):
             os.makedirs(path)
     files = [i for i in os.listdir(path) if os.path.isfile(os.path.join(path,i)) and \
@@ -85,9 +85,10 @@ class Tab1 (ttk.Frame):
     def launch(self, r, c):
         text = agents_info[r-3]['AGENT_ID']
         print("Launching agent", text)
-        proc = subprocess.Popen("py agent.py "+ text, shell=True ,creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
-        #proc = subprocess.Popen("python3 agent.py "+ text, shell=True, preexec_fn=os.setsid)
-        #proc = subprocess.Popen("py agent.py "+ text, shell=True, start_new_session=True)
+        if(platform.system()=="Windows"):
+        	proc = subprocess.Popen("py agent.py "+ text, shell=True ,creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+        else:
+        	proc = subprocess.Popen("python3 agent.py "+ text, shell=True, preexec_fn=os.setsid)
         self.agent_pid_dict[text]=proc
         print("-------------------------------------------------------------------------")
         

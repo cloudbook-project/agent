@@ -194,9 +194,9 @@ def create_LOCAL_agent(grant, fs=False):
 	config_dict["CIRCLE_ID"]="LOCAL"
 	loader.write_dictionary(config_dict, path+"/config/config_agent.json")
 	(my_agent_ID, my_circle_ID) = configure_agent.createAgentID()
-	print("Caca",my_agent_ID)
+	print("Agent_ID: ",my_agent_ID)
 	configure_agent.setFSPath(fs)
-	print("Recaca, fs hecho")
+	print("FSPath hecho")
 	configure_agent.setGrantLevel(grant, my_agent_ID)
 	print("Vamos a renombrar")
 	os.rename(path+"/config/config_agent.json", path+"/config/config_agent"+my_agent_ID+".json")

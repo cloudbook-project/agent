@@ -53,7 +53,7 @@ def createAgentID():
     	#Random agent_id if it doesn't exist
 		my_agent_ID= ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20))
 	else:
-		my_agent_ID="agent_0"
+		my_agent_ID="0" # agent_0
 	if config_dict["AGENT_ID"]=="0":
 		config_dict["AGENT_ID"]=my_agent_ID
 	else:
@@ -107,7 +107,6 @@ def editGrantLevel(level, my_agent_ID):
 		fo.close()
 		return
 
-
 #This function sets the grant of a new agent. It is used by the agent when creating a new one.
 #It receives the grant level of the agent and edits the auto-generated configuration file that will be for that agent.
 def setGrantLevel(level, my_agent_ID):
@@ -124,15 +123,17 @@ def setGrantLevel(level, my_agent_ID):
 	path=config_dict["DISTRIBUTED_FS"]
 	if level in ("LOW", "MEDIUM", "HIGH"):
 		config_dict["GRANT_LEVEL"]=level
+		loader.write_dictionary(config_dict, fs+"/config/config_agent.json")
 		#Config has been set, now, lets write it in agents_grant.json
 		#Checking if file is empty, if so, write the IP directly.
+		# File does not exist -> create empty file
 		while not os.path.exists(fs+"/distributed/agents_grant.json"):
 			fo = open(path+"/agents_grant.json", 'w')
 			fo.close()
+		# File exists but is empty -> append
 		if os.stat(path+"/agents_grant.json").st_size==0:
 			fo = open(path+"/agents_grant.json", 'w')
 			data={}
-			data[my_agent_ID]={}
 			data[my_agent_ID]={}
 			data[my_agent_ID]=level
 			json_data=json.dumps(data)
@@ -142,6 +143,7 @@ def setGrantLevel(level, my_agent_ID):
 		else:
 			fr = open(path+"/agents_grant.json", 'r')
 			directory = json.load(fr)
+			# File contains the agent -> update values
 			if my_agent_ID in directory:
 				directory[my_agent_ID]=level
 				fo = open(path+"/agents_grant.json", 'w')
@@ -149,7 +151,7 @@ def setGrantLevel(level, my_agent_ID):
 				fo.write(directory)
 				fo.close()
 				return
-		# if agent not already written, we append it.
+		# File not empty but does not contain the agent -> append
 			fr = open(path+"/agents_grant.json", 'r')
 			directory = json.load(fr)
 			directory[my_agent_ID]={}

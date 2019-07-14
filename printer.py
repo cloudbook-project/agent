@@ -6,7 +6,7 @@ import sys
 if __name__ == "__main__":
 
 	cloudbook_dict_agents = loader.load_dictionary('./du_files/cloudbook_agents.json')
-	host_du0 =cloudbook_dict_agents.get("agent_0").keys()[0]
+	host_du0 =cloudbook_dict_agents.get("0").keys()[0]
 	"""
 	try :
 		#text=raw_input()

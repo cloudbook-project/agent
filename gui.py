@@ -47,13 +47,14 @@ class Tab1 (ttk.Frame):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        print("Active processes: ", self.agent_pid_dict, "\n")
+
         self.label_welcome = ttk.Label(self)
         self.label_welcome["text"] = ("Welcome to CloudBook user interface. Your agents are:")
         self.label_welcome.grid(row=0, column=0, columnspan=4, padx=100, pady=10)
-        title_bar = [" Agent ID ", " Circle ID ", " Grant ", " Status ", "", ""]
+        title_bar = [" Agent ID ", " Circle ID ", " Grant ", " Status ", "", "", ""]
         h=int(len(agents_info)+1)
-        w=6
-        z=0
+        w=7
         for i in range(h):
             for j in range(w):
                 if(i==0):
@@ -62,22 +63,29 @@ class Tab1 (ttk.Frame):
                     self.cell["font"]=("Helvetica", 12, "bold", "underline")
                     self.cell.grid(row=i+2, column=j)
                 else:
-                    if(j==4):
-                        
+                    if(j==w-3):
                         self.launch_button = ttk.Button(self, text="Launch", command=lambda r=i+2, c=j: self.launch(r, c))
                         self.launch_button.grid(column=j, row=i+2)
-                    elif(j==5):
+                    elif(j==w-2):
                         self.stop_button = ttk.Button(self, text="Stop", command=lambda r=i+2, c=j: self.stop(r, c))
                         self.stop_button.grid(column=j, row=i+2)
+                    elif(j==w-1):
+                        self.remove_button = ttk.Button(self, text="Remove", command=lambda r=i+2, c=j: self.remove(r, c))
+                        self.remove_button.grid(column=j, row=i+2)
+                    elif(j==w-4):
+                        self.cell=ttk.Label(self)
+                        if (list(agents_info[i-1].values()))[0] in self.agent_pid_dict.keys():
+                            self.cell["foreground"] = "green"
+                            self.cell["text"] = "RUNNING"
+                        else:
+                            self.cell["foreground"] = "red"
+                            self.cell["text"] = "STOPPED"
+                        self.cell.grid(row=i+2, column=j)
                     else:
-                        minidict=list(agents_info[i-1].values())
-                        if(minidict[j]==agents_info[i-1]['DISTRIBUTED_FS']):
-                            z=1
-                            continue
+                        agent_circle_and_grant = {k: agents_info[i-1][k] for k in ('AGENT_ID', 'CIRCLE_ID', 'GRANT_LEVEL')}
+                        minidict = list(agent_circle_and_grant.values())
                         self.cell=ttk.Label(self)
                         self.cell["text"]=minidict[j]
-                        if(j>0):
-                            j=j-1
                         self.cell.grid(row=i+2, column=j)
 
 
@@ -91,6 +99,7 @@ class Tab1 (ttk.Frame):
         	proc = subprocess.Popen("python3 agent.py "+ text, shell=True, preexec_fn=os.setsid)
         self.agent_pid_dict[text]=proc
         print("-------------------------------------------------------------------------")
+        print("Active processes: ", self.agent_pid_dict, "\n")
         
     #Functionality of the "Stop" button.
     def stop(self, r, c):
@@ -102,6 +111,11 @@ class Tab1 (ttk.Frame):
         else:
             os.killpg(os.getpgid(self.agent_pid_dict[text].pid), signal.SIGTERM)
         del  self.agent_pid_dict[text]
+        print("Active processes: ", self.agent_pid_dict, "\n")
+
+    #Functionality of the "Remove" button.
+    def remove(self, r, c):
+        print("Unimplemented remove function")
         
 
 #This tab is the one including the information to create a new agent.

@@ -10,7 +10,6 @@ import loader
 ##########
 ## TODO ##
 ##########
-# Add "status" section in config_agent file with two possible values: ONLINE/OFFLINE
 # Add a way to identify agent_0 (the creator)
 # With the information given before, create a tab ONLY for the main agent giving information about the circle
 #   -> Information from local_ip_publisher and circle_info?
@@ -28,7 +27,7 @@ def get_info():
         if not os.path.exists(path):
             os.makedirs(path)
     files = [i for i in os.listdir(path) if os.path.isfile(os.path.join(path,i)) and \
-             'config_agent' in i]
+             'config_' in i]
 
     my_agents_info={}
     for file in files:
@@ -119,16 +118,16 @@ class Tab1 (ttk.Frame):
     def remove(self, r, c):
         path = get_info()
         agent_id = agents_info[r-3]['AGENT_ID']
-        config_path = path + os.sep + "config_agent" + agent_id + ".json"
+        config_path = path + os.sep + "config_" + agent_id + ".json"
         if agent_id in self.agent_pid_dict:
-            print("Agent " + agent_id + " is running! It must be stopped to be removed.")
+            print(agent_id + " is running! It must be stopped to be removed.")
             return
         if os.path.exists(config_path):
             config_dict = loader.load_dictionary(config_path)
             grant_path = config_dict["DISTRIBUTED_FS"] + os.sep + "agents_grant.json"
             if os.path.exists(grant_path):
                 grants_dict = loader.load_dictionary(grant_path)
-                if agent_id=="0" and len(grants_dict)>1:
+                if agent_id=="agent_0" and len(grants_dict)>1:
                     print("You must remove all other agents before attempting to remove " + agent_id + ".")
                     return
                 try:
@@ -249,7 +248,7 @@ class TabX(ttk.Frame):
     def __init__(self, *args, var):
         super().__init__(*args)
         self.agent=var
-        ttk.Label(self, text="Agent "+ var['AGENT_ID'], font="bold").grid(column=2, row=0, columnspan=5)
+        ttk.Label(self, text=var['AGENT_ID'], font="bold").grid(column=2, row=0, columnspan=5)
         ttk.Label(self, text="Edit agent info. Please, make sure the agent is stopped before any change.").grid(column=1, row=1, columnspan=5)
 
         ttk.Label(self, text="Circle ID:").grid(column=1, row=3, sticky='w')

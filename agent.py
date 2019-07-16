@@ -190,16 +190,16 @@ def create_LOCAL_agent(grant, fs=False):
 	if not fs:
 		fs = path+"/distributed"
 	configure_agent.generate_default_config()
-	config_dict=loader.load_dictionary(path+"/config/config_agent.json")
+	config_dict=loader.load_dictionary(path+"/config/config_.json")
 	config_dict["CIRCLE_ID"]="LOCAL"
-	loader.write_dictionary(config_dict, path+"/config/config_agent.json")
+	loader.write_dictionary(config_dict, path+"/config/config_.json")
 	(my_agent_ID, my_circle_ID) = configure_agent.createAgentID()
 	print("Agent_ID: ",my_agent_ID)
 	configure_agent.setFSPath(fs)
 	print("FSPath hecho")
 	configure_agent.setGrantLevel(grant, my_agent_ID)
 	print("Vamos a renombrar")
-	os.rename(path+"/config/config_agent.json", path+"/config/config_agent"+my_agent_ID+".json")
+	os.rename(path+"/config/config_.json", path+"/config/config_"+my_agent_ID+".json")
 
 
 #This function is used by the GUI. With the grant level selected and/or the FS it edits an existing agent.
@@ -226,7 +226,7 @@ if __name__ == "__main__":
 		fs = "/etc/cloudbook"
 	#load config file
 	agent_id = sys.argv[1]
-	config_dict=loader.load_dictionary(fs+"/config/config_agent"+agent_id+".json")
+	config_dict=loader.load_dictionary(fs+"/config/config_"+agent_id+".json")
 	#global my_agent_ID
 	#global my_circle_ID
 

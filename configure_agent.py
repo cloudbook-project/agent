@@ -13,9 +13,9 @@ def editFSPath(path, my_agent_ID):
 		fs = "/etc/cloudbook"
 		if not os.path.exists(fs):
 			os.makedirs(fs)
-	config_dict=loader.load_dictionary(fs+"/config/config_agent"+my_agent_ID+".json")
+	config_dict=loader.load_dictionary(fs+"/config/config_"+my_agent_ID+".json")
 	config_dict["DISTRIBUTED_FS"]=path
-	loader.write_dictionary(config_dict, fs+"/config/config_agent"+my_agent_ID+".json")
+	loader.write_dictionary(config_dict, fs+"/config/config_"+my_agent_ID+".json")
 
 
 #This function sets the filesystem path of a new agent. It is used by the agent when creating a new one.
@@ -31,9 +31,9 @@ def setFSPath(path):
 		if not os.path.exists(fs):
 			os.makedirs(fs)
 	#load config file
-	config_dict=loader.load_dictionary(fs+"/config/config_agent.json")
+	config_dict=loader.load_dictionary(fs+"/config/config_.json")
 	config_dict["DISTRIBUTED_FS"]=path
-	loader.write_dictionary(config_dict, fs+"/config/config_agent.json")
+	loader.write_dictionary(config_dict, fs+"/config/config_.json")
 
 
 #Creates an agent ID in case it hasn't been created before, and writes it in configuration file
@@ -48,18 +48,19 @@ def createAgentID():
 		if not os.path.exists(fs):
 			os.makedirs(fs)
 	#load config file
-	config_dict=loader.load_dictionary(fs+"/config/config_agent.json")
+	config_dict=loader.load_dictionary(fs+"/config/config_.json")
 	if(os.stat(fs+"/distributed/agents_grant.json").st_size>0 and len(loader.load_dictionary(fs+"/distributed/agents_grant.json"))>0):
     	#Random agent_id if it doesn't exist
-		my_agent_ID= ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20))
+		my_agent_ID= ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20)) #35^20 ~ 10^30 IDs
+		my_agent_ID = "agent_" + my_agent_ID
 	else:
-		my_agent_ID="0" # agent_0
+		my_agent_ID = "agent_0"
 	if config_dict["AGENT_ID"]=="0":
 		config_dict["AGENT_ID"]=my_agent_ID
 	else:
 		my_agent_ID=config_dict["AGENT_ID"]
 	my_circle_ID=config_dict["CIRCLE_ID"]
-	loader.write_dictionary(config_dict, fs+"/config/config_agent.json")
+	loader.write_dictionary(config_dict, fs+"/config/config_.json")
 	return (my_agent_ID, my_circle_ID)
 
 
@@ -75,9 +76,9 @@ def editCircleID(newCircleID, my_agent_ID):
 		if not os.path.exists(fs):
 			os.makedirs(fs)
 	#load config file
-	config_dict=loader.load_dictionary(fs+"/config/config_agent"+my_agent_ID+".json")
+	config_dict=loader.load_dictionary(fs+"/config/config_"+my_agent_ID+".json")
 	config_dict["CIRCLE_ID"]=newCircleID
-	loader.write_dictionary(config_dict, fs+"/config/config_agent"+my_agent_ID+".json")
+	loader.write_dictionary(config_dict, fs+"/config/config_"+my_agent_ID+".json")
 
 
 
@@ -93,11 +94,11 @@ def editGrantLevel(level, my_agent_ID):
 		fs = "/etc/cloudbook"
 		if not os.path.exists(fs):
 			os.makedirs(fs)
-	config_dict=loader.load_dictionary(fs+"/config/config_agent"+my_agent_ID+".json")
+	config_dict=loader.load_dictionary(fs+"/config/config_"+my_agent_ID+".json")
 	path=config_dict["DISTRIBUTED_FS"]
 	if level in ("LOW", "MEDIUM", "HIGH"):
 		config_dict["GRANT_LEVEL"]=level
-		loader.write_dictionary(config_dict, fs+"/config/config_agent"+my_agent_ID+".json")
+		loader.write_dictionary(config_dict, fs+"/config/config_"+my_agent_ID+".json")
 		fr = open(path+"/agents_grant.json", 'r')
 		directory = json.load(fr)
 		directory[my_agent_ID]=level
@@ -119,11 +120,11 @@ def setGrantLevel(level, my_agent_ID):
 		if not os.path.exists(fs):
 			os.makedirs(fs)
 	#load config file
-	config_dict=loader.load_dictionary(fs+"/config/config_agent.json")
+	config_dict=loader.load_dictionary(fs+"/config/config_.json")
 	path=config_dict["DISTRIBUTED_FS"]
 	if level in ("LOW", "MEDIUM", "HIGH"):
 		config_dict["GRANT_LEVEL"]=level
-		loader.write_dictionary(config_dict, fs+"/config/config_agent.json")
+		loader.write_dictionary(config_dict, fs+"/config/config_.json")
 		#Config has been set, now, lets write it in agents_grant.json
 		#Checking if file is empty, if so, write the IP directly.
 		# File does not exist -> create empty file
@@ -175,10 +176,10 @@ def generate_default_config():
 			os.makedirs(fs)
 
 	default={"AGENT_ID": "0", "DISTRIBUTED_FS": fs+"/distributed", "CIRCLE_ID": "LOCAL", "GRANT_LEVEL": "MEDIUM"}
-	if os.path.isfile(fs+"/config/config_agent.json"):
-		open(fs+"/config_agent.json", 'w').close()
+	if os.path.isfile(fs+"/config/config_.json"):
+		open(fs+"/config_.json", 'w').close()
 	else:
-		fo = open(fs+"/config/config_agent.json", 'w')
+		fo = open(fs+"/config/config_.json", 'w')
 		default=json.dumps(default)
 		fo.write(default)
 		fo.close()

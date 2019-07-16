@@ -21,7 +21,7 @@ def announceAgent(my_circle_ID, my_agent_ID, port, configuration = None):
         if not os.path.exists(fs):
             os.makedirs(fs)
 	#load config file
-    config_dict=loader.load_dictionary(fs+"/config/config_agent"+my_agent_ID+".json")
+    config_dict=loader.load_dictionary(fs+"/config/config_"+my_agent_ID+".json")
     path = config_dict["DISTRIBUTED_FS"]
     
     #while(True):
@@ -80,7 +80,7 @@ def getAgentIP(my_agent_id, agent_id, configuration = None):
         if not os.path.exists(fs):
             os.makedirs(fs)
 	#load config file
-    config_dict=loader.load_dictionary(fs+"/config/config_agent"+my_agent_id+".json")
+    config_dict=loader.load_dictionary(fs+"/config/config_"+my_agent_id+".json")
     path = config_dict["DISTRIBUTED_FS"]
     with open(path+'/local_IP_info.json', 'r') as file:
         data = json.load(file)

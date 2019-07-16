@@ -5,6 +5,7 @@ import os, json
 import subprocess, sys, os, signal, platform
 
 import agent
+import loader
 
 ##########
 ## TODO ##
@@ -36,6 +37,7 @@ def get_info():
     global agents_info
     agents_info=my_agents_info
     print(agents_info)
+    return path
 
 #This is the first type of tab. It includes all the information related to the different agents that live in the machine.
 #It provides with "launch" and "stop" buttons. The information about the different agents is readed from the get_info() function.
@@ -115,7 +117,32 @@ class Tab1 (ttk.Frame):
 
     #Functionality of the "Remove" button.
     def remove(self, r, c):
-        print("Unimplemented remove function")
+        path = get_info()
+        agent_id = agents_info[r-3]['AGENT_ID']
+        config_path = path + os.sep + "config_agent" + agent_id + ".json"
+        if agent_id in self.agent_pid_dict:
+            print("Agent " + agent_id + " is running! It must be stopped to be removed.")
+            return
+        if os.path.exists(config_path):
+            config_dict = loader.load_dictionary(config_path)
+            grant_path = config_dict["DISTRIBUTED_FS"] + os.sep + "agents_grant.json"
+            if os.path.exists(grant_path):
+                grants_dict = loader.load_dictionary(grant_path)
+                if agent_id=="0" and len(grants_dict)>1:
+                    print("You must remove all other agents before attempting to remove " + agent_id + ".")
+                    return
+                try:
+                    grants_dict.pop(agent_id)
+                except KeyError:
+                    print("ERROR: could not delete ", agent_id, ". File " + grant_path + " does not contain information about the agent.")
+                    return
+                loader.write_dictionary(grants_dict, grant_path)
+            else:
+                print("ERROR: could not find " + grant_path + ". Removal aborted.")
+                return
+            os.remove(config_path)
+        else:
+            print("ERROR: could not find " + config_path + ". Removal aborted.")
         
 
 #This tab is the one including the information to create a new agent.

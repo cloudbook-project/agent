@@ -49,7 +49,7 @@ def createAgentID():
 			os.makedirs(fs)
 	#load config file
 	config_dict=loader.load_dictionary(fs+"/config/config_agent.json")
-	if(os.stat(fs+"/distributed/agents_grant.json").st_size>0):
+	if(os.stat(fs+"/distributed/agents_grant.json").st_size>0 and len(loader.load_dictionary(fs+"/distributed/agents_grant.json"))>0):
     	#Random agent_id if it doesn't exist
 		my_agent_ID= ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20))
 	else:
@@ -131,7 +131,7 @@ def setGrantLevel(level, my_agent_ID):
 			fo = open(path+"/agents_grant.json", 'w')
 			fo.close()
 		# File exists but is empty -> append
-		if os.stat(path+"/agents_grant.json").st_size==0:
+		if os.stat(path+"/agents_grant.json").st_size==0 or len(loader.load_dictionary(fs+"/distributed/agents_grant.json"))==0:
 			fo = open(path+"/agents_grant.json", 'w')
 			data={}
 			data[my_agent_ID]={}

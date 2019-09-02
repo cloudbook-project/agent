@@ -35,6 +35,8 @@ all_dus=[]
 #index in order to make the round robin assignation of all_dus
 parallel_du_index = 0
 
+#for stats count
+stats_dict = {}
 
 application = Flask(__name__)
 
@@ -60,13 +62,18 @@ def invoke(configuration = None):
 	'''
 	global du_list
 	global my_agent_ID
+	global stats_dict
 
 	print("=====AGENT: /INVOKE=====")
 	print(threading.get_ident())
-	
+	print("===================Estadisticas por ahora", stats_dict)
 	invoked_data = ""
 	print("REQUEST.form: ", request.form)
 	invoked_function=request.args.get('invoked_function')
+	try:
+		invoker_function=request.args.get('invoker_function')
+	except:
+		invoker_function = None
 	for i in request.form:
 		invoked_data = i
 	print("INVOKED DATA: ", invoked_data)
@@ -78,6 +85,14 @@ def invoke(configuration = None):
 	print("Yo soy", my_agent_ID)
 	print ("invoked_du ", invoked_du)
 	print("TEST: DU_LIST",du_list)
+	#write stats
+	stats_invoked_function = invoked_function[j+1:] #only fun name without du
+	try:
+		stats_dict[stats_invoked_function][invoker_function] += 1
+	except:
+		stats_dict[stats_invoked_function] = {}
+		stats_dict[stats_invoked_function][invoker_function] = 1 
+
 	#if the function belongs to the agent
 	if invoked_du in du_list:
 		resul = eval(invoked_function+"("+invoked_data+")")
@@ -87,7 +102,7 @@ def invoke(configuration = None):
 	print ("\n")
 	return resul
 
-def outgoing_invoke(invoked_du, invoked_function, invoked_data, configuration = None):
+def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function = None, configuration = None):
 	global parallel_du_index
 	'''
 	This function is the one that calls the functions that do not belong to the agent's dus
@@ -156,7 +171,10 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, configuration = 
 	
 	#lets choose the du from de list of dus passed
 	chosen_du = remote_du
-	url='http://'+host+"/invoke?invoked_function="+chosen_du+"."+invoked_function
+	if invoker_function == None:
+		url='http://'+host+"/invoke?invoked_function="+chosen_du+"."+invoked_function
+	else:
+		url='http://'+host+"/invoke?invoked_function="+chosen_du+"."+invoked_function+"&invoker_function="+invoker_function
 	print (url)
 
 	send_data = invoked_data.encode()

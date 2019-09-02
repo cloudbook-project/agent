@@ -8,6 +8,7 @@ import os, sys, time, threading, logging, platform
 from multiprocessing import Process
 from pynat import get_ip_info #requires pip3 install pynat
 import urllib # this import requires pip3 install urllib
+import os
 
 # agent_ID of this agent. this is a global var
 my_agent_ID="None"
@@ -38,6 +39,12 @@ parallel_du_index = 0
 #for stats count
 stats_dict = {}
 
+#files and folders
+if(platform.system()=="Windows"):
+	path= os.environ['HOMEDRIVE'] + os.environ['HOMEPATH']+os.sep+"cloudbook"
+else:
+	path = "/etc/cloudbook/"
+
 application = Flask(__name__)
 
 @application.route("/", methods=['GET', 'PUT', 'POST'])
@@ -63,10 +70,11 @@ def invoke(configuration = None):
 	global du_list
 	global my_agent_ID
 	global stats_dict
+	global path
 
 	print("=====AGENT: /INVOKE=====")
 	print(threading.get_ident())
-	print("===================Estadisticas por ahora", stats_dict)
+	print("===================Estadisticas por ahora", stats_dict, "para el fichero: stats_"+my_agent_ID+".txt")
 	invoked_data = ""
 	print("REQUEST.form: ", request.form)
 	invoked_function=request.args.get('invoked_function')
@@ -88,10 +96,27 @@ def invoke(configuration = None):
 	#write stats
 	stats_invoked_function = invoked_function[j+1:] #only fun name without du
 	try:
-		stats_dict[stats_invoked_function][invoker_function] += 1
+		#stats_dict[stats_invoked_function][invoker_function] += 1
+		if invoker_function != None:
+			stats_dict[stats_invoked_function][invoker_function] += 1
+		else:
+			pass
 	except:
-		stats_dict[stats_invoked_function] = {}
-		stats_dict[stats_invoked_function][invoker_function] = 1 
+		#stats_dict[stats_invoked_function] = {}
+		#stats_dict[stats_invoked_function][invoker_function] = 1 
+		if invoker_function != None:
+			stats_dict[stats_invoked_function] = {}
+			stats_dict[stats_invoked_function][invoker_function] = 1
+		else:
+			pass
+
+	stats_file = "stats_"+my_agent_ID+".json"
+	f_stats = open(path+os.sep+"distributed"+os.sep+"stats"+os.sep+stats_file,"w")
+	f_stats.write(json.dumps(stats_dict))
+	f_stats.close()
+	#with open(path+os.sep+"stats"+os.sep+stats_file,"w") as f_stats:
+	#	f_stats.write(stats_dict)
+
 
 	#if the function belongs to the agent
 	if invoked_du in du_list:

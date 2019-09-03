@@ -95,18 +95,23 @@ def invoke(configuration = None):
 	print("TEST: DU_LIST",du_list)
 	#write stats
 	stats_invoked_function = invoked_function[j+1:] #only fun name without du
-	try:
+	try: #update stats dict, try sum 1 to the existing dictionary entry
 		#stats_dict[stats_invoked_function][invoker_function] += 1
 		if invoker_function != None:
 			stats_dict[stats_invoked_function][invoker_function] += 1
 		else:
 			pass
-	except:
+	except: #if the invoker function isnt in the dictionary we have to create a entry for the invoker function
 		#stats_dict[stats_invoked_function] = {}
 		#stats_dict[stats_invoked_function][invoker_function] = 1 
 		if invoker_function != None:
-			stats_dict[stats_invoked_function] = {}
-			stats_dict[stats_invoked_function][invoker_function] = 1
+			##stats_dict[stats_invoked_function] = {}
+			##stats_dict[stats_invoked_function][invoker_function] = 1
+			try: 
+				stats_dict[stats_invoked_function][invoker_function] = 1
+			except: #Only generates a dictionary for a invoked function the first time is invoked
+				stats_dict[stats_invoked_function] = {}
+				stats_dict[stats_invoked_function][invoker_function] = 1
 		else:
 			pass
 

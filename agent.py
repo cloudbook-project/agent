@@ -95,7 +95,8 @@ def invoke(configuration = None):
 	print("TEST: DU_LIST",du_list)
 	#write stats
 	stats_invoked_function = invoked_function[j+1:] #only fun name without du
-	try: #update stats dict, try sum 1 to the existing dictionary entry
+	update_stats(stats_invoked_function,invoker_function)
+	'''try: #update stats dict, try sum 1 to the existing dictionary entry
 		#stats_dict[stats_invoked_function][invoker_function] += 1
 		if invoker_function != None:
 			stats_dict[stats_invoked_function][invoker_function] += 1
@@ -118,10 +119,7 @@ def invoke(configuration = None):
 	stats_file = "stats_"+my_agent_ID+".json"
 	f_stats = open(path+os.sep+"distributed"+os.sep+"stats"+os.sep+stats_file,"w")
 	f_stats.write(json.dumps(stats_dict))
-	f_stats.close()
-	#with open(path+os.sep+"stats"+os.sep+stats_file,"w") as f_stats:
-	#	f_stats.write(stats_dict)
-
+	f_stats.close()'''
 
 	#if the function belongs to the agent
 	if invoked_du in du_list:
@@ -181,6 +179,7 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 		print("Hago eval de: "+ invoked_du[0]+"."+invoked_function+"("+invoked_data+")")
 		res = eval(invoked_du[0]+"."+invoked_function+"("+invoked_data+")")
 		print("Responde: "+ res)
+		update_stats(invoked_function,invoker_function)
 		return eval(res)
 
     # get the possible agents to invoke
@@ -264,6 +263,37 @@ def flaskThreaded(port):
 	print("Launched in port:", port)
 	application.run(debug=False, host="0.0.0.0",port=port,threaded=True)
 	print("00000000000000000000000000000000000000000000000000000000000000000000000000")
+
+#This function updates the stats_file
+def update_stats(invoked, invoker):
+	global my_agent_ID
+	global stats_dict
+	global path
+
+	try: #update stats dict, try sum 1 to the existing dictionary entry
+		#stats_dict[invoked][invoker] += 1
+		if invoker != None:
+			stats_dict[invoked][invoker] += 1
+		else:
+			pass
+	except: #if the invoker function isnt in the dictionary we have to create a entry for the invoker function
+		#stats_dict[invoked] = {}
+		#stats_dict[invoked][invoker] = 1 
+		if invoker != None:
+			##stats_dict[invoked] = {}
+			##stats_dict[invoked][invoker] = 1
+			try: 
+				stats_dict[invoked][invoker] = 1
+			except: #Only generates a dictionary for a invoked function the first time is invoked
+				stats_dict[invoked] = {}
+				stats_dict[invoked][invoker] = 1
+		else:
+			pass
+
+	stats_file = "stats_"+my_agent_ID+".json"
+	f_stats = open(path+os.sep+"distributed"+os.sep+"stats"+os.sep+stats_file,"w")
+	f_stats.write(json.dumps(stats_dict))
+	f_stats.close()
 
 if __name__ == "__main__":
 	print("Starting agent...")

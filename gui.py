@@ -19,7 +19,7 @@ import loader
 agents_info = {}
 def get_info():
     if(platform.system()=="Windows"):
-        path= os.environ['HOMEDRIVE'] + os.environ['HOMEPATH']+"/cloudbook/config/"
+        path = os.environ['HOMEDRIVE'] + os.environ['HOMEPATH']+"/cloudbook/config/"
         if not os.path.exists(path):
             os.makedirs(path)
     else:
@@ -29,18 +29,18 @@ def get_info():
     files = [i for i in os.listdir(path) if os.path.isfile(os.path.join(path,i)) and \
              'config_' in i]
 
-    my_agents_info={}
+    my_agents_info = {}
     for file in files:
         with open(path+file, 'r') as config:
-            my_agents_info[files.index(file)]=json.load(config)
+            my_agents_info[files.index(file)] = json.load(config)
     global agents_info
-    agents_info=my_agents_info
+    agents_info = my_agents_info
     print(agents_info)
     return path
 
 #This is the first type of tab. It includes all the information related to the different agents that live in the machine.
 #It provides with "launch" and "stop" buttons. The information about the different agents is readed from the get_info() function.
-class Tab1 (ttk.Frame):
+class GeneralInfoTab (ttk.Frame):
 
     agent_pid_dict = {}
 
@@ -54,14 +54,14 @@ class Tab1 (ttk.Frame):
         self.label_welcome["text"] = ("Welcome to CloudBook user interface. Your agents are:")
         self.label_welcome.grid(row=0, column=0, columnspan=4, padx=100, pady=10)
         title_bar = [" Agent ID ", " Circle ID ", " Grant ", " Status ", "", "", ""]
-        h=int(len(agents_info)+1)
-        w=7
+        h = int(len(agents_info)+1)
+        w = 7
         for i in range(h):
             for j in range(w):
                 if(i==0):
-                    self.cell=ttk.Label(self)
-                    self.cell["text"]=title_bar[j]
-                    self.cell["font"]=("Helvetica", 12, "bold", "underline")
+                    self.cell = ttk.Label(self)
+                    self.cell["text"] = title_bar[j]
+                    self.cell["font"] = ("Helvetica", 12, "bold", "underline")
                     self.cell.grid(row=i+2, column=j)
                 else:
                     if(j==w-3):
@@ -85,8 +85,8 @@ class Tab1 (ttk.Frame):
                     else:
                         agent_circle_and_grant = {k: agents_info[i-1][k] for k in ('AGENT_ID', 'CIRCLE_ID', 'GRANT_LEVEL')}
                         minidict = list(agent_circle_and_grant.values())
-                        self.cell=ttk.Label(self)
-                        self.cell["text"]=minidict[j]
+                        self.cell = ttk.Label(self)
+                        self.cell["text"] = minidict[j]
                         self.cell.grid(row=i+2, column=j)
 
 
@@ -146,7 +146,7 @@ class Tab1 (ttk.Frame):
 
 #This tab is the one including the information to create a new agent.
 #Some fields are disabled since they are not supported yet.
-class Tab2(ttk.Frame):
+class AddAgentTab(ttk.Frame):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -161,35 +161,35 @@ class Tab2(ttk.Frame):
         self.circle_entry = ttk.Entry(self, text="LOCAL")
         self.circle_entry["state"]=(tk.DISABLED)
         self.circle_entry.grid(column=2, row=4, columnspan=2)
-        self.set_circle_button = ttk.Button(self, text="Set", command=self.buttonset)
+        self.set_circle_button = ttk.Button(self, text="Set", command=self.set_circle_ID)
         self.set_circle_button['state']='disable'
         self.set_circle_button.grid(column=4, row = 4)
 
         self.grant_label = ttk.Label(self)
-        self.grant_label["text"]=("Grant Level")
+        self.grant_label["text"] = ("Grant Level")
         self.grant_label.grid(column=0, row=6)
         self.grant_combo = ttk.Combobox(self)
         self.grant_combo = ttk.Combobox(self, state="readonly")
         self.grant_combo["values"] = ["HIGH", "MEDIUM", "LOW",]
         self.grant_combo.grid(column=2, row=6, columnspan=2)
         self.set_grant_button = ttk.Button(self, text="Set", command=self.set_grant)
-        self.set_grant_button.grid(column=4, row = 6)
+        self.set_grant_button.grid(column=4, row=6)
         ttk.Label(self, text="Filesystem Path:").grid(column=0, row=7)
-        self.fspath=ttk.Entry(self)
+        self.fspath = ttk.Entry(self)
         #self.fspath.insert(0, "AQUI EL PATH")
-        self.fspath["state"]=(tk.DISABLED)
+        self.fspath["state"] = (tk.DISABLED)
         self.fspath.grid(column=1, row=7, columnspan=3)
-        self.bwButton = ttk.Button(self, text="Select", command=self.browse_button)
-        self.bwButton.grid(column=4, row=7)
+        self.browse_fs_path_button = ttk.Button(self, text="Select", command=self.browse_FS_path)
+        self.browse_fs_path_button.grid(column=4, row=7)
 
         self.create_circle = ttk.Button(self, text="Create agent and attach", command=self.create)
         #self.attach_circle = ttk.Button(self, text="Attach circle", command=self.attach)
         self.create_circle.grid(column=3, row=8)
         #self.attach_circle.grid(column=3, row=7)
 
-    #Functionality for set button
-    def buttonset(self):
-        user_input=self.circle_entry.get()
+    #Functionality for set Circle ID button
+    def set_circle_ID(self):
+        user_input = self.circle_entry.get()
         print(user_input)
 
     #Functionality for grant switch-case
@@ -224,11 +224,11 @@ class Tab2(ttk.Frame):
     
     #This button launches a new gui to select the folder for the FS path.
     #This parameter is optional.
-    def browse_button(self):
+    def browse_FS_path(self):
         filename = filedialog.askdirectory()
-        self.fspath["state"]=(tk.NORMAL)
+        self.fspath["state"] = (tk.NORMAL)
         self.fspath.insert(0,filename)
-        self.fspath["state"]=("readonly")
+        self.fspath["state"] = ("readonly")
         print(filename)
 
 
@@ -240,44 +240,44 @@ class Tab3(ttk.Frame):
 # Tab that contains the information of a specific agent located in the machine.
 # It algo provides functionality to edit its parameters such as the FS, or the grant.
 # It contains disabled functions because its functionality will be included in the future.
-class TabX(ttk.Frame):
+class AgentXTab(ttk.Frame):
 
     agent = []
     path = ""
     
     def __init__(self, *args, var):
         super().__init__(*args)
-        self.agent=var
+        self.agent = var
         ttk.Label(self, text=var['AGENT_ID'], font="bold").grid(column=2, row=0, columnspan=5)
         ttk.Label(self, text="Edit agent info. Please, make sure the agent is stopped before any change.").grid(column=1, row=1, columnspan=5)
 
         ttk.Label(self, text="Circle ID:").grid(column=1, row=3, sticky='w')
         ttk.Label(self, text=var['CIRCLE_ID']).grid(column=3, row=3, sticky='w')
-        self.texto=ttk.Entry(self, state="readonly")
-        self.texto.grid(column=6, row=3)
-        self.botonEditar = ttk.Button(self, text='Edit', command=self.edit_circle_id)
-        self.botonEditar['state']='disable'
-        self.botonEditar.grid(column=8, row=3)
+        self.text = ttk.Entry(self, state="readonly")
+        self.text.grid(column=6, row=3)
+        self.edit_circle_id_button = ttk.Button(self, text='Edit', command=self.edit_circle_id)
+        self.edit_circle_id_button['state']='disable'
+        self.edit_circle_id_button.grid(column=8, row=3)
         ttk.Label(self, text="Grant level:").grid(column=1, row=4, sticky='w')
         ttk.Label(self, text=var['GRANT_LEVEL']).grid(column=3, row=4, sticky='w')
-        self.combo=ttk.Combobox(self, state="readonly")
+        self.combo = ttk.Combobox(self, state="readonly")
         self.combo["values"]=["HIGH", "MEDIUM", "LOW"]
         self.combo.grid(column=6, row=4)
         ttk.Button(self, text='Edit', command=self.set_grant).grid(column=8, row=4)
         ttk.Label(self, text="Filesystem Path:").grid(column=1, row=5, sticky='w')
-        textfs=var['DISTRIBUTED_FS']
+        textfs = var['DISTRIBUTED_FS']
         ttk.Label(self, text="..."+textfs[-27:]).grid(column=3, row=5, sticky='w')
-        self.fspath=ttk.Entry(self)
+        self.fspath = ttk.Entry(self)
         self.fspath["state"]=(tk.DISABLED)
         self.fspath.grid(column=6, row=5)
-        self.bwButton = ttk.Button(self, text="Select", command=self.browse_button)
-        self.bwButton.grid(column=8, row=5)
+        self.browse_fs_path_button = ttk.Button(self, text="Select", command=self.browse_FS_path)
+        self.browse_fs_path_button.grid(column=8, row=5)
 
 
     #To be added when the functionality is implemented.
     def edit_circle_id(self):
     
-        print("En el campo pone: " +self.texto.get()+" del agente " + self.agent['AGENT_ID'])
+        print("En el campo pone: " + self.text.get() + " del agente " + self.agent['AGENT_ID'])
 
     #Functionality to edit the agent grant. It calls to the "edit_agent()" function in the 
     # agent software.
@@ -293,12 +293,12 @@ class TabX(ttk.Frame):
         agent.edit_agent(self.agent['AGENT_ID'], grant=switch(self.combo.current()))
         
     #This button launches a new gui to select another folder for the FS path. 
-    def browse_button(self):
+    def browse_FS_path(self):
         filename = filedialog.askdirectory()
-        self.fspath["state"]=(tk.NORMAL)
+        self.fspath["state"] = (tk.NORMAL)
         self.fspath.insert(0,filename)
-        self.fspath["state"]=("readonly")
-        print(filename+" del agente " + self.agent['AGENT_ID'])
+        self.fspath["state"] = ("readonly")
+        print(filename + " del agente " + self.agent['AGENT_ID'])
         agent.edit_agent(self.agent['AGENT_ID'], fs=filename)
         
 
@@ -313,18 +313,18 @@ class Application(ttk.Frame):
 
         self.notebook = ttk.Notebook(self)
         
-        self.tab1 = Tab1(self.notebook)
+        self.tab1 = GeneralInfoTab(self.notebook)
         self.notebook.add(
             self.tab1, text="General Info", padding=10)
         
-        self.tab2 = Tab2(self.notebook)
+        self.tab2 = AddAgentTab(self.notebook)
         self.notebook.add(
             self.tab2, text="Add Agents", padding=10)
         
         for info in agents_info:
-            globals()['self.'+str(info)] = TabX(self.notebook, var=agents_info[info])
+            globals()['self.'+str(info)] = AgentXTab(self.notebook, var=agents_info[info])
             self.notebook.add(
-                globals()['self.'+str(info)], text="Agent "+ str(info), padding=10)
+                globals()['self.'+str(info)], text="Agent "+str(info), padding=10)
 
         #Refresh button created
         tk.Button(self, text="Refresh", command=self.refresh).pack()
@@ -338,18 +338,18 @@ class Application(ttk.Frame):
         self.tab2.destroy()
         self.notebook.destroy()
         self.notebook = ttk.Notebook(self)
-        self.tab1 = Tab1(self.notebook)
+        self.tab1 = GeneralInfoTab(self.notebook)
         self.notebook.add(
             self.tab1, text="General Info", padding=10)
         
-        self.tab2 = Tab2(self.notebook)
+        self.tab2 = AddAgentTab(self.notebook)
         self.notebook.add(
             self.tab2, text="Add Agents", padding=10)
         
         for info in agents_info:
-            globals()['self.'+str(info)] = TabX(self.notebook, var=agents_info[info])
+            globals()['self.'+str(info)] = AgentXTab(self.notebook, var=agents_info[info])
             self.notebook.add(
-                globals()['self.'+str(info)], text="Agent "+ str(info), padding=10)
+                globals()['self.'+str(info)], text="Agent "+str(info), padding=10)
 
         self.notebook.pack(expand=True, fill="both")
         self.pack(expand=True, fill="both")

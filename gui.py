@@ -6,6 +6,7 @@ import subprocess, sys, os, signal, platform
 
 import agent
 import loader
+import time
 
 ##########
 ## TODO ##
@@ -35,6 +36,7 @@ def get_info():
             my_agents_info[files.index(file)] = json.load(config)
     global agents_info
     agents_info = my_agents_info
+    print("agents_info:")
     print(agents_info)
     return path
 
@@ -98,9 +100,10 @@ class GeneralInfoTab (ttk.Frame):
         	proc = subprocess.Popen("py agent.py "+ text, shell=True ,creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
         else:
         	proc = subprocess.Popen("python3 agent.py "+ text, shell=True, preexec_fn=os.setsid)
-        self.agent_pid_dict[text]=proc
+        self.agent_pid_dict[text] = proc
         print("-------------------------------------------------------------------------")
         print("Active processes: ", self.agent_pid_dict, "\n")
+        app.refresh()
         
     #Functionality of the "Stop" button.
     def stop(self, r, c):
@@ -113,6 +116,7 @@ class GeneralInfoTab (ttk.Frame):
             os.killpg(os.getpgid(self.agent_pid_dict[text].pid), signal.SIGTERM)
         del  self.agent_pid_dict[text]
         print("Active processes: ", self.agent_pid_dict, "\n")
+        app.refresh()
 
     #Functionality of the "Remove" button.
     def remove(self, r, c):
@@ -142,7 +146,8 @@ class GeneralInfoTab (ttk.Frame):
             os.remove(config_path)
         else:
             print("ERROR: could not find " + config_path + ". Removal aborted.")
-        
+            return
+        app.refresh()        
 
 #This tab is the one including the information to create a new agent.
 #Some fields are disabled since they are not supported yet.
@@ -171,6 +176,7 @@ class AddAgentTab(ttk.Frame):
         self.grant_combo = ttk.Combobox(self)
         self.grant_combo = ttk.Combobox(self, state="readonly")
         self.grant_combo["values"] = ["HIGH", "MEDIUM", "LOW",]
+        self.grant_combo.current(1)
         self.grant_combo.grid(column=2, row=6, columnspan=2)
         self.set_grant_button = ttk.Button(self, text="Set", command=self.set_grant)
         self.set_grant_button.grid(column=4, row=6)
@@ -219,8 +225,8 @@ class AddAgentTab(ttk.Frame):
         print("GRANT: " + grant )
         fspath = self.fspath.get()
         print("FS: " + fspath)
-
         agent.create_LOCAL_agent(grant, fspath)
+        app.refresh()
     
     #This button launches a new gui to select the folder for the FS path.
     #This parameter is optional.
@@ -261,14 +267,16 @@ class AgentXTab(ttk.Frame):
         ttk.Label(self, text="Grant level:").grid(column=1, row=4, sticky='w')
         ttk.Label(self, text=var['GRANT_LEVEL']).grid(column=3, row=4, sticky='w')
         self.combo = ttk.Combobox(self, state="readonly")
-        self.combo["values"]=["HIGH", "MEDIUM", "LOW"]
+        self.combo["values"] = ["HIGH", "MEDIUM", "LOW"]
+        self.combo.current({"HIGH":0, "MEDIUM":1, "LOW":2}.get(var['GRANT_LEVEL']))
         self.combo.grid(column=6, row=4)
+        #self.combo.bind(set_grant)
         ttk.Button(self, text='Edit', command=self.set_grant).grid(column=8, row=4)
         ttk.Label(self, text="Filesystem Path:").grid(column=1, row=5, sticky='w')
         textfs = var['DISTRIBUTED_FS']
         ttk.Label(self, text="..."+textfs[-27:]).grid(column=3, row=5, sticky='w')
         self.fspath = ttk.Entry(self)
-        self.fspath["state"]=(tk.DISABLED)
+        self.fspath["state"] = (tk.DISABLED)
         self.fspath.grid(column=6, row=5)
         self.browse_fs_path_button = ttk.Button(self, text="Select", command=self.browse_FS_path)
         self.browse_fs_path_button.grid(column=8, row=5)
@@ -288,9 +296,10 @@ class AgentXTab(ttk.Frame):
                 1: "MEDIUM",
                 2: "LOW"
             }  
-            return switcher.get(index, "No se ha seleccionado nada")
-        print("Se ha seleccionado: " + switch(self.combo.current())+" del agente " + self.agent['AGENT_ID'])
+            return switcher.get(index, "No grant selected.")
+        print("The new grant for agent " + self.agent['AGENT_ID'] + " is: " + switch(self.combo.current()))
         agent.edit_agent(self.agent['AGENT_ID'], grant=switch(self.combo.current()))
+        app.refresh()
         
     #This button launches a new gui to select another folder for the FS path. 
     def browse_FS_path(self):
@@ -298,7 +307,7 @@ class AgentXTab(ttk.Frame):
         self.fspath["state"] = (tk.NORMAL)
         self.fspath.insert(0,filename)
         self.fspath["state"] = ("readonly")
-        print(filename + " del agente " + self.agent['AGENT_ID'])
+        print("The new path for the agent " + self.agent['AGENT_ID'] + " is: " + filename)
         agent.edit_agent(self.agent['AGENT_ID'], fs=filename)
         
 

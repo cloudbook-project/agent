@@ -178,9 +178,13 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 		#res=eval(invoked_function)
 		print("Hago eval de: "+ invoked_du[0]+"."+invoked_function+"("+invoked_data+")")
 		res = eval(invoked_du[0]+"."+invoked_function+"("+invoked_data+")")
-		print("Responde: "+ res)
+		print("Responde: ",res)
 		update_stats(invoked_function,invoker_function)
-		return eval(res)
+		##return eval(res)
+		try:
+			return eval(res)
+		except:
+			return res
 
     # get the possible agents to invoke
 	global my_agent_ID

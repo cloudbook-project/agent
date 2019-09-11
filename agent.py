@@ -9,7 +9,7 @@ from multiprocessing import Process
 from pynat import get_ip_info #requires pip3 install pynat
 import urllib # this import requires pip3 install urllib
 import os
-
+import queue
 
 
 #####   GLOBAL VARIABLES   #####
@@ -28,8 +28,11 @@ cloudbook_dict_agents = {}
 # List of Deployable units loaded by this agent
 du_list = []
 
-# Dictionary of config
-config_dict = {}
+# Dictionary of agent configuration
+agent_config_dict = {}
+
+# Dictionary of circle configuration
+circle_config_dict = {}
 
 # Global variable to define working mode
 LOCAL_MODE = False
@@ -41,6 +44,9 @@ parallel_du_index = 0
 
 # For stats count
 stats_dict = {}
+
+# FIFO queue that passes stats to the stats_creator_thread
+stats_queue = queue.Queue(maxsize=0) # infinite size
 
 # Files and folders
 if(platform.system()=="Windows"):
@@ -101,35 +107,13 @@ def invoke(configuration = None):
 	print ("invoked_du ", invoked_du)
 	print("TEST: DU_LIST",du_list)
 	
-	# Write stats
-	stats_invoked_function = invoked_function[j+1:] #only fun name without du
-	update_stats(stats_invoked_function,invoker_function)
-	'''try: #update stats dict, try sum 1 to the existing dictionary entry
-		#stats_dict[stats_invoked_function][invoker_function] += 1
-		if invoker_function != None:
-			stats_dict[stats_invoked_function][invoker_function] += 1
-		else:
-			pass
-	except: #if the invoker function isnt in the dictionary we have to create a entry for the invoker function
-		#stats_dict[stats_invoked_function] = {}
-		#stats_dict[stats_invoked_function][invoker_function] = 1 
-		if invoker_function != None:
-			##stats_dict[stats_invoked_function] = {}
-			##stats_dict[stats_invoked_function][invoker_function] = 1
-			try: 
-				stats_dict[stats_invoked_function][invoker_function] = 1
-			except: #Only generates a dictionary for a invoked function the first time is invoked
-				stats_dict[stats_invoked_function] = {}
-				stats_dict[stats_invoked_function][invoker_function] = 1
-		else:
-			pass
+	# Queue data stats
+	stats_data = {}
+	stats_data['invoked'] = invoked_function[j+1:] #only fun name without du
+	stats_data['invoker'] = invoker_function
+	stats_queue.put(stats_data)
 
-	stats_file = "stats_"+my_agent_ID+".json"
-	f_stats = open(path+os.sep+"distributed"+os.sep+"stats"+os.sep+stats_file,"w")
-	f_stats.write(json.dumps(stats_dict))
-	f_stats.close()'''
-
-	#if the function belongs to the agent
+	# If the function belongs to the agent
 	if invoked_du in du_list:
 		resul = eval(invoked_function+"("+invoked_data+")")
 	else:
@@ -187,7 +171,13 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 		print("Hago eval de: "+ invoked_du[0]+"."+invoked_function+"("+invoked_data+")")
 		res = eval(invoked_du[0]+"."+invoked_function+"("+invoked_data+")")
 		print("Responde: ", res)
-		update_stats(invoked_function,invoker_function)
+
+		# Queue data stats
+		stats_data = {}
+		stats_data['invoked'] = invoked_function
+		stats_data['invoker'] = invoker_function
+		stats_queue.put(stats_data)
+
 		try:
 			return eval(res)
 		except:
@@ -251,9 +241,9 @@ def create_LOCAL_agent(grant, fs=False):
 	if not fs:
 		fs = path+"/distributed"
 	configure_agent.generate_default_config()
-	config_dict=loader.load_dictionary(path+"/config/config_.json")
-	config_dict["CIRCLE_ID"]="LOCAL"
-	loader.write_dictionary(config_dict, path+"/config/config_.json")
+	agent_config_dict = loader.load_dictionary(path+"/config/config_.json")
+	agent_config_dict["CIRCLE_ID"]="LOCAL"
+	loader.write_dictionary(agent_config_dict, path+"/config/config_.json")
 	(my_agent_ID, my_circle_ID) = configure_agent.createAgentID()
 	print("Agent_ID: ",my_agent_ID)
 	configure_agent.setFSPath(fs)
@@ -271,6 +261,7 @@ def edit_agent(agent_id, grant='', fs=''):
 		configure_agent.editFSPath(fs, agent_id)
 	return
 
+
 # This function launches the flask server in the port given as parameter.
 def flaskThreaded(port):
 	port = int(port)
@@ -278,36 +269,50 @@ def flaskThreaded(port):
 	application.run(debug=False, host="0.0.0.0",port=port,threaded=True)
 	print("00000000000000000000000000000000000000000000000000000000000000000000000000")
 
-# This function updates the stats_file.
-def update_stats(invoked, invoker):
-	global my_agent_ID
-	global stats_dict
-	global path
 
-	try: #update stats dict, try sum 1 to the existing dictionary entry
-		#stats_dict[invoked][invoker] += 1
-		if invoker != None:
-			stats_dict[invoked][invoker] += 1
-		else:
-			pass
-	except: #if the invoker function isnt in the dictionary we have to create a entry for the invoker function
-		#stats_dict[invoked] = {}
-		#stats_dict[invoked][invoker] = 1 
-		if invoker != None:
-			##stats_dict[invoked] = {}
-			##stats_dict[invoked][invoker] = 1
-			try: 
-				stats_dict[invoked][invoker] = 1
-			except: #Only generates a dictionary for a invoked function the first time is invoked
-				stats_dict[invoked] = {}
-				stats_dict[invoked][invoker] = 1
-		else:
-			pass
+# Target function of the thread to create the stats. Implements the stats creation as a model producer/consumer with a queue of data
+def create_stats(t1):
+	print("Stats creator thread started")
+	time_start = time.monotonic()
+	stats_dictionary = {}
 
-	stats_file = "stats_"+my_agent_ID+".json"
-	f_stats = open(path+os.sep+"distributed"+os.sep+"stats"+os.sep+stats_file,"w")
-	f_stats.write(json.dumps(stats_dict))
-	f_stats.close()
+	while True:
+		current_time = time.monotonic()
+		while not stats_queue.empty():
+			item = stats_queue.get()
+			print("New stat: ", item)
+
+			# Add data to dictionary
+			try:
+				invoker = item['invoker']
+				invoked = item['invoked']
+			except:
+				print("There was a problem with the stat item obtained from the queue. Key invoker/invoked not present")
+
+			try:
+				if invoker != None:
+					stats_dictionary[invoked][invoker] += 1 	# Add 1 to the existing dictionary entry
+			except:
+				if invoker != None:
+					try: 
+						stats_dictionary[invoked][invoker] = 1  # Key 'invoker' not in the 'invoked' dictionary --> create and set to 1
+					except:
+						stats_dictionary[invoked] = {} 			# Key 'invoked' not in the stats dictionary --> create it (empty)
+						stats_dictionary[invoked][invoker] = 1 	# Create key 'invoker' in the 'invoked' dictionary and set it 1
+
+			stats_queue.task_done()
+
+		# In case that it is time to create the stats file, add t1 to time_start and write the dictionary in the stats_agent_XX.json
+		if current_time-time_start >= t1:
+			time_start += t1
+			stats_file = "stats_"+my_agent_ID+".json"
+			f_stats = open(path+os.sep+"distributed"+os.sep+"stats"+os.sep+stats_file,"w")
+			f_stats.write(json.dumps(stats_dictionary))
+			f_stats.close()
+			stats_dictionary = {}
+
+		# Wait 1 second to look for more data in the queue
+		time.sleep(1)
 
 
 
@@ -320,14 +325,21 @@ if __name__ == "__main__":
 	else:
 		fs = "/etc/cloudbook"
 
-	# Load config file
+	# Load agent config file
 	agent_id = sys.argv[1]
-	config_dict = loader.load_dictionary(fs+"/config/config_"+agent_id+".json")
+	agent_config_dict = loader.load_dictionary(fs+"/config/config_"+agent_id+".json")
 
-	my_agent_ID = config_dict["AGENT_ID"]
-	my_circle_ID = config_dict["CIRCLE_ID"]
-	fs_path = config_dict["DISTRIBUTED_FS"]
-	my_grant = config_dict["GRANT_LEVEL"]
+	my_agent_ID = agent_config_dict["AGENT_ID"]
+	my_circle_ID = agent_config_dict["CIRCLE_ID"]
+	fs_path = agent_config_dict["DISTRIBUTED_FS"]
+	my_grant = agent_config_dict["GRANT_LEVEL"]
+
+	# Load circle config file
+	circle_config_dict = loader.load_dictionary(fs+"/config/config.json")
+
+	agent_stats_interval = circle_config_dict['circle_info']['AGENT_STATS_INTERVAL']
+	agent_interval = circle_config_dict['circle_info']['AGENT_INTERVAL']
+	lan_mode = circle_config_dict['circle_info']['LAN']
 
 	print ("my_agent_ID="+my_agent_ID)
 
@@ -385,6 +397,9 @@ if __name__ == "__main__":
 	# Set up the logger
 	log = logging.getLogger('werkzeug')
 	log.setLevel(logging.ERROR)
+
+	# Launch the stats creator thread
+	threading.Thread(target=create_stats, args=(agent_stats_interval,)).start()
 
 	# Laucnch the IP publisher thread
 	threading.Thread(target=local_publisher.announceAgent, args=(my_circle_ID, my_agent_ID, local_port)).start()

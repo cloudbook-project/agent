@@ -10,6 +10,7 @@ from pynat import get_ip_info #requires pip3 install pynat
 import urllib # this import requires pip3 install urllib
 import os
 import queue
+import socket
 
 
 #####   GLOBAL VARIABLES   #####
@@ -25,7 +26,7 @@ cloudbook_dict_dus = {}
 # Dictionary of agents 
 cloudbook_dict_agents = {}
 
-# List of Deployable units loaded by this agent
+# List of deployable units loaded by this agent
 du_list = []
 
 # Dictionary of agent configuration
@@ -229,6 +230,7 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 # This function is used by the GUI. Generates a new agent given the grant level and the FS (if provided)
 # Checks the OS to adapt the path of the folders.
 # Generates a default configuration file that is edited and adapted afterwards.
+# NEED TO TEST IN LINUX. I think both editions of "path" variable can be deleted and you can write "global path" at the beginning of the function to edit the variable, (check: https://www.geeksforgeeks.org/global-local-variables-python/)
 def create_LOCAL_agent(grant, fs=False):
 	if(platform.system()=="Windows"):
 		path = os.environ['HOMEDRIVE'] + os.environ['HOMEPATH']+"/cloudbook"
@@ -316,6 +318,21 @@ def create_stats(t1):
 		time.sleep(1)
 
 
+# This function checks if the port passed as parameter is available or in use, trying to bind that port to a socket. Then, the socket is
+# closed and the result (true/false) is returned.
+def check_port_available(port):
+	sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+	available = False
+	try:
+		sock.bind(("0.0.0.0", port))
+		print("Port " + str(port) + " is available.")
+		available = True
+	except:
+		print("Port " + str(port) + " is in use.")
+	sock.close()
+	return available
+
+
 
 #####   AGENT MAIN   #####
 if __name__ == "__main__":
@@ -369,9 +386,11 @@ if __name__ == "__main__":
 	host = local_publisher.get_local_ip()
 	print ("This host is ", host)
 
-	#Local port to be opened
-	local_port = 3000+int(num_du)
-	print (host, local_port)
+	# Check the first port available from 5000 (included) onwards
+	local_port = 5000
+	while not check_port_available(local_port):
+		local_port += 1
+	print("For the host " + host + ", the first port available from 5000 onwards is: ", local_port)
 
 	# Get all dus
 	for i in cloudbook_dict_agents:

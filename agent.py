@@ -236,6 +236,7 @@ def create_LOCAL_agent(grant, fs=False):
 			os.makedirs(path)
 	else:
 		fs = "/etc/cloudbook"
+		path = "/etc/cloudbook"
 		if not os.path.exists(path):
 			os.makedirs(path)
 	if not fs:

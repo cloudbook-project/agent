@@ -1,27 +1,27 @@
 from flask import Flask
 from flask import request
-from flask import jsonify
-import json
 from flask import abort, redirect, url_for
-import loader, upnp, publisher_frontend, local_publisher, configure_agent
+import loader
 import os, sys, time, threading, logging, platform
 from multiprocessing import Process
 from pynat import get_ip_info #requires pip3 install pynat
 import urllib # this import requires pip3 install urllib
-import os
 import queue
 import socket
-
+import random, string
 
 #####   GLOBAL VARIABLES   #####
 # Identifier of this agent
 my_agent_ID = "None"
 
 # Identifier of the circle that this agent belongs to
-my_circle_ID = "None"
+#my_circle_ID = "None"
+
+# Identifier of the project that this agent belongs to
+my_project_name = "None"
 
 # Dictionary of dus and location
-cloudbook_dict_dus = {}
+#cloudbook_dict_dus = {}
 
 # Dictionary of agents 
 cloudbook_dict_agents = {}
@@ -36,24 +36,38 @@ agent_config_dict = {}
 circle_config_dict = {}
 
 # Global variable to define working mode
-LOCAL_MODE = False
+#LOCAL_MODE = False
 
 # All dus that contain the program
 all_dus = []
 # Index in order to make the round robin assignation of all_dus
 parallel_du_index = 0
 
-# For stats count
-stats_dict = {}
+# FIFO queue that passes stats to the stats file creator thread
+sats_queue = queue.Queue(maxsize=0)
 
-# FIFO queue that passes stats to the stats_creator_thread
-stats_queue = queue.Queue(maxsize=0) # infinite size
+# FIFO queue that passes the changes of grant to the grant file creator thread
+grant_queue = queue.Queue(maxsize=0)
 
 # Files and folders
 if(platform.system()=="Windows"):
-	path = os.environ['HOMEDRIVE'] + os.environ['HOMEPATH']+os.sep+"cloudbook"
+	cloudbook_path = os.environ['HOMEDRIVE'] + os.environ['HOMEPATH']+os.sep+"cloudbook"
 else:
-	path = "/etc/cloudbook/"
+	cloudbook_path = "/etc/cloudbook/"
+
+# Path to the project the agent belongs to
+project_path = "None"
+
+# Variable that contains the information from agents_grant.json (last read)
+#Format:
+# {
+# 	"agent_0": {"GRANT": "LOW", "IP": "192.168.1.44", "PORT": 5000},
+# 	"agent_G2UQXFV1O2NWTNRQY8GD": {"GRANT": "LOW", "IP": "192.168.1.44", "PORT": 5001},
+# 	"agent_IGPAMITGCCPPYMTQ4BQA": {"GRANT": "LOW", "IP": "192.168.1.44", "PORT": 5002},
+# 	"agent_OMRZ22CQB157H3POXG3A": {"GRANT": "LOW", "IP": "192.168.1.44", "PORT": 5003}
+# }
+agents_grant = {}
+# agents_grant[agent_id]['IP'] + ":" + agents_grant[agent_id]['PORT']
 
 
 
@@ -70,7 +84,7 @@ def hello():
 def invoke(configuration = None):
 	'''
 	This function receives petitions from other Agents or the run command
-	This function is invoked through http like this: http://138.4.7.151:3000/invoke?invoked_function=du_0.main
+	This function is invoked through http like this: http://138.4.7.151:5000/invoke?invoked_function=du_0.main
 	The invocation contains:
 		-GET: the invoked function
 		-POST: the invoked data
@@ -84,11 +98,9 @@ def invoke(configuration = None):
 	global du_list
 	global my_agent_ID
 	global stats_dict
-	global path
 
 	print("=====AGENT: /INVOKE=====")
 	print(threading.get_ident())
-	print("===================Estadisticas por ahora", stats_dict, "para el fichero: stats_"+my_agent_ID+".txt")
 	invoked_data = ""
 	print("REQUEST.form: ", request.form)
 	invoked_function = request.args.get('invoked_function')
@@ -193,19 +205,19 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 	remote_agent = list_agents[0] # several agents can have this remote DU. In order to test, get the first
 	print ("remote agent", remote_agent)
 
-	#host = remote ip+port
-	
-	host = local_publisher.getAgentIP(my_agent_ID, remote_agent)
-	host = host["IP"]
-	print("TEST: HOST: ",host)
-	# Cache IPs --> Done by default in both local publisher and publisher frontend.
-	
+	try:
+		desired_host_ip_port = agents_grant[agent_id]['IP'] + ":" + agents_grant[agent_id]['PORT']
+		print("TEST: HOST: ",desired_host_ip_port)
+	except Exception as e:
+		print("ERROR: cannot find the ip and port for invoking the desired agent!")
+		raise e 	# Maybe set alarm???
+
 	# Choose du from de list of dus passed
 	chosen_du = remote_du
 	if invoker_function == None:
-		url = 'http://'+host+"/invoke?invoked_function="+chosen_du+"."+invoked_function
+		url = 'http://'+desired_host_ip_port+"/invoke?invoked_function="+chosen_du+"."+invoked_function
 	else:
-		url = 'http://'+host+"/invoke?invoked_function="+chosen_du+"."+invoked_function+"&invoker_function="+invoker_function
+		url = 'http://'+desired_host_ip_port+"/invoke?invoked_function="+chosen_du+"."+invoked_function+"&invoker_function="+invoker_function
 	print (url)
 
 	send_data = invoked_data.encode()
@@ -230,39 +242,63 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 # This function is used by the GUI. Generates a new agent given the grant level and the FS (if provided)
 # Checks the OS to adapt the path of the folders.
 # Generates a default configuration file that is edited and adapted afterwards.
-# NEED TO TEST IN LINUX. I think both editions of "path" variable can be deleted and you can write "global path" at the beginning of the function to edit the variable, (check: https://www.geeksforgeeks.org/global-local-variables-python/)
-def create_LOCAL_agent(grant, fs=False):
-	if(platform.system()=="Windows"):
-		path = os.environ['HOMEDRIVE'] + os.environ['HOMEPATH']+"/cloudbook"
-		if not os.path.exists(path):
-			os.makedirs(path)
-	else:
-		fs = "/etc/cloudbook"
-		path = "/etc/cloudbook"
-		if not os.path.exists(path):
-			os.makedirs(path)
+def create_agent(grant, project_name, fs=False, agent_0=False):
+	global my_agent_ID
+	global my_project_name
+	global project_path
+
+	my_project_name = project_name
+	# Check paths existence and create if they do not.
+	if not os.path.exists(cloudbook_path):
+		os.makedirs(cloudbook_path)
+	
+	poject_path = cloudbook_path + os.sep + project_name
 	if not fs:
-		fs = path+"/distributed"
-	configure_agent.generate_default_config()
-	agent_config_dict = loader.load_dictionary(path+"/config/config_.json")
-	agent_config_dict["CIRCLE_ID"]="LOCAL"
-	loader.write_dictionary(agent_config_dict, path+"/config/config_.json")
-	(my_agent_ID, my_circle_ID) = configure_agent.createAgentID()
-	print("Agent_ID: ",my_agent_ID)
-	configure_agent.setFSPath(fs)
-	print("FSPath hecho")
-	configure_agent.setGrantLevel(grant, my_agent_ID)
-	print("Vamos a renombrar")
-	os.rename(path+"/config/config_.json", path+"/config/config_"+my_agent_ID+".json")
+		fs = poject_path + os.sep + "distributed"
+	if not os.path.exists(fs):
+		os.makedirs(fs)
+
+	# Create dictionary with the agent info
+	agent_config_dict = {} # = {"AGENT_ID": "0", "GRANT_LEVEL": "MEDIUM", "DISTRIBUTED_FS": fs+"/distributed"}
+	if agent_0:
+		id_num = 0
+	else:
+		id_num = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20))
+	my_agent_ID = "agent_" + str(id_num)
+	agent_config_dict['AGENT_ID'] = my_agent_ID
+	agent_config_dict['GRANT_LEVEL'] = grant
+	agent_config_dict['DISTRIBUTED_FS'] = fs
+
+	# Write dictionary in file
+	config_file_path = poject_path + os.sep + "config" + os.sep + "config_"+my_agent_ID+".json"
+	loader.write_dictionary(agent_config_dict, config_file_path)
+
+	print("\n---  NEW AGENT CREATED  ----------------------------------------------------------------------------")
+	print("     Agent_id = ", id_num)
+	print("     Grant    = ", grant)
+	print("     FSPath   = ", fs)
+	print("----------------------------------------------------------------------------------------------------\n")
+
 
 
 # This function is used by the GUI. Modifies the the grant level and/or the FS of the current agent according to the parameters given.
-def edit_agent(agent_id, grant='', fs=''):
-	if(grant!=''):
-		configure_agent.editGrantLevel(grant, agent_id)
-	if(fs!=''):
-		configure_agent.editFSPath(fs, agent_id)
-	return
+def edit_agent(agent_id, project_name, new_grant='', new_fs=''):
+	if new_grant=='' and new_fs=='':
+		return
+
+	config_file_path = cloudbook_path + os.sep + project_name + os.sep + "config" + os.sep + "config_"+agent_id+".json"
+	config_dict = loader.load_dictionary(config_file_path)
+
+	if(new_grant!=''):
+		config_dict["GRANT_LEVEL"] = new_grant
+		grant_data = {}
+		grant_data['grant'] = new_grant
+		grant_queue.put(grant_data)
+
+	if(new_fs!=''):
+		config_dict["DISTRIBUTED_FS"] = new_fs
+
+	loader.write_dictionary(config_dict, config_file_path)
 
 
 # This function launches the flask server in the port given as parameter.
@@ -273,11 +309,12 @@ def flaskThreaded(port):
 	print("00000000000000000000000000000000000000000000000000000000000000000000000000")
 
 
-# Target function of the thread to create the stats. Implements the stats creation as a model producer/consumer with a queue of data
+# Target function of the stats file creator thread. Implements the consumer of the producer/consumer model using stats_queue.
 def create_stats(t1):
 	print("Stats creator thread started")
 	time_start = time.monotonic()
 	stats_dictionary = {}
+	stats_file_path = project_path + os.sep + "distributed" + os.sep + "stats" + os.sep + "stats_"+my_agent_ID+".json"
 
 	while True:
 		current_time = time.monotonic()
@@ -308,11 +345,84 @@ def create_stats(t1):
 		# In case that it is time to create the stats file, add t1 to time_start and write the dictionary in the stats_agent_XX.json
 		if current_time-time_start >= t1:
 			time_start += t1
-			stats_file = "stats_"+my_agent_ID+".json"
-			f_stats = open(path+os.sep+"distributed"+os.sep+"stats"+os.sep+stats_file,"w")
-			f_stats.write(json.dumps(stats_dictionary))
-			f_stats.close()
+			loader.write_dictionary(stats_dictionary, stats_file_path)
 			stats_dictionary = {}
+
+		# Wait 1 second to look for more data in the queue
+		time.sleep(1)
+
+
+# Target function of the grant file creator thread. Implements the consumer of the producer/consumer model using  grant_queue.
+# If the internal port is given it is used with the local IP. Otherwise, external IP and port are used.
+def create_grant(agent_grant_interval, init_grant, int_port=0):
+	print("Agent info (grant,ip,port) file creator thread starts execution")
+	time_start = time.monotonic()
+
+	# Get IPs and ports
+	(_, ext_ip, ext_port, int_ip) = get_ip_info(include_internal=True)
+
+	# Create and fill dictionary with initial data
+	grant_dictionary = {}
+	grant_dictionary[my_agent_ID] = {}
+	grant_dictionary[my_agent_ID]["GRANT"] = init_grant
+	if int_port==0: 	# If no internal port is given, use externals
+		grant_dictionary[my_agent_ID]["IP"] = ext_ip
+		grant_dictionary[my_agent_ID]["PORT"] = ext_port
+	else: 				# Use internal IP and port
+		grant_dictionary[my_agent_ID]["IP"] = int_ip
+		grant_dictionary[my_agent_ID]["PORT"] = int_port
+
+	agent_X_grant_file_path = project_path + os.sep + "distributed" + os.sep + "agents_grant" + os.sep + my_agent_ID+"_grant.json"
+	agents_grant_file_path = project_path + os.sep + "distributed" + os.sep + "agents_grant.json"
+
+	# Internal function to write the "agent_X_grant.json" file consumed by the deployer
+	def write_agent_X_grant_file():
+		print("Grant file will be updated with: ", grant_dictionary)
+		loader.write_dictionary(grant_dictionary, agent_X_grant_file_path)
+
+	# Internal function to load the "agents_grant.json" file created by the deployer
+	def read_agents_grant_file():
+		global agents_grant
+		agents_grant = loader.load_dictionary(agents_grant_file_path)
+		print("agents_grant.json has been read.\n agents_grant = ", agents_grant)
+
+	write_agent_X_grant_file()
+	read_agents_grant_file()
+	grant = None
+
+	while True:
+		current_time = time.monotonic()
+
+		# While there is data in the queue, analyze it
+		while not grant_queue.empty():
+			item = grant_queue.get()
+			print("Grant item retrieved from queue: ", item)
+			try:
+				item_grant = item['grant']
+				if item_grant=='HIGH' or item_grant=='MEDIUM' or item_grant=='LOW':
+					grant = item_grant
+				else:
+					print("The grant obtained from the queue is not valid. Invalid value.")
+			except:
+				print("There was a problem with the grant item obtained from the queue. Invalid key.")
+
+		# When the the interval time expires
+		if current_time-time_start >= agent_grant_interval:
+			time_start += agent_grant_interval
+
+			# Update dictionary with new data (grant)
+			if grant!= None:
+				grant_dictionary[my_agent_ID]["GRANT"] = grant
+				print('Grant dict updated')
+
+			# Update also IP/port ??? --> call get_ip_info() again and update if necessary
+			#grant_dictionary[my_agent_ID]["IP"] = ip
+			#grant_dictionary[my_agent_ID]["PORT"] = port
+
+			# Write dictionary in "agent_X_grant.json" and read dictionary from "agents_grant.json"
+			write_agent_X_grant_file()
+			read_agents_grant_file()
+			grant = None
 
 		# Wait 1 second to look for more data in the queue
 		time.sleep(1)
@@ -338,59 +448,54 @@ def check_port_available(port):
 if __name__ == "__main__":
 	print("Starting agent...")
 
-	if(platform.system()=="Windows"):
-		fs = os.environ['HOMEDRIVE'] + os.environ['HOMEPATH']+os.sep+"cloudbook"
-	else:
-		fs = "/etc/cloudbook"
+	# if(platform.system()=="Windows"):
+	# 	fs = os.environ['HOMEDRIVE'] + os.environ['HOMEPATH']+os.sep+"cloudbook"
+	# else:
+	# 	fs = "/etc/cloudbook"
 
 	# Load agent config file
 	agent_id = sys.argv[1]
-	agent_config_dict = loader.load_dictionary(fs+"/config/config_"+agent_id+".json")
+	project_name = sys.argv[2]
+	project_path = cloudbook_path + os.sep + project_name
+	agent_config_dict = loader.load_dictionary(project_path + os.sep + "config" + os.sep + "config_"+agent_id+".json")
 
 	my_agent_ID = agent_config_dict["AGENT_ID"]
-	my_circle_ID = agent_config_dict["CIRCLE_ID"]
 	fs_path = agent_config_dict["DISTRIBUTED_FS"]
 	my_grant = agent_config_dict["GRANT_LEVEL"]
 
 	# Load circle config file
-	circle_config_dict = loader.load_dictionary(fs+"/config/config.json")
+	circle_config_dict = loader.load_dictionary(project_path + os.sep + "config" + os.sep + "config.json")
 
-	agent_stats_interval = circle_config_dict['circle_info']['AGENT_STATS_INTERVAL']
-	agent_interval = circle_config_dict['circle_info']['AGENT_INTERVAL']
-	lan_mode = circle_config_dict['circle_info']['LAN']
+	agent_stats_interval = circle_config_dict['AGENT_STATS_INTERVAL']
+	agent_grant_interval = circle_config_dict['AGENT_GRANT_INTERVAL']
+	lan_mode = circle_config_dict['LAN']
 
-	print ("my_agent_ID="+my_agent_ID)
+	print ("my_agent_ID = " + my_agent_ID)
 
-	print ("loading deployable units for agent "+my_agent_ID+"...")
+	print ("Loading deployable units for agent " + my_agent_ID + "...")
 	#cloudbook_dict_agents = loader.load_cloudbook_agents()
 
 	# It will only contain info about agent_id : du_assigned (not IP)
 	# Output file from DEPLOYER
 	# It is necessary to wait until cloudbook.json exists
-	while not os.path.exists(fs_path+'/cloudbook.json'):
+	cloudbookjson_file_path = fs_path + os.sep + "cloudbook.json"
+	while not os.path.exists(cloudbookjson_file_path):
 		time.sleep(0.1)
 
-	while(os.stat(fs_path+'/cloudbook.json').st_size==0):
+	while(os.stat(cloudbookjson_file_path).st_size==0):
 		continue
 	# Check file format
-	cloudbook_dict_agents = loader.load_cloudbook(fs_path+'/cloudbook.json')
+	cloudbook_dict_agents = loader.load_cloudbook(cloudbookjson_file_path)
 	
 	# Load the DUs that belong to this agent.
 	du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
 	print("My du_list: ", du_list)
 
-	j = du_list[0].rfind('_')+1
-	# num_du is the initial DU and will be used as offset for listen port
-	num_du = du_list[0][j:]
-
-	host = local_publisher.get_local_ip()
-	print ("This host is ", host)
-
 	# Check the first port available from 5000 (included) onwards
 	local_port = 5000
 	while not check_port_available(local_port):
 		local_port += 1
-	print("For the host " + host + ", the first port available from 5000 onwards is: ", local_port)
+	print("The first port available from 5000 onwards is: ", local_port)
 
 	# Get all dus
 	for i in cloudbook_dict_agents:
@@ -401,15 +506,16 @@ if __name__ == "__main__":
 		exec ("from du_files import "+du)
 		exec(du+".invoker=outgoing_invoke")'''
 
+	du_files_path = fs_path + os.sep + "du_files"
+	UNIX_du_files_path = du_files_path.replace(os.sep, "/")
 	for du in du_list:
 		print(du)
-		while not os.path.exists(fs_path+"/du_files/"+du+".py"):
+		du_i_file_path = du_files_path + os.sep + du+".py"
+		while not os.path.exists(du_i_file_path):
 			time.sleep(0.1)
 		##OJO CON ESTO QUE HAY QUE PROBARLO BIEN BIEN
 		
-		ruta = fs_path.replace(os.sep, "/")
-		ruta = ruta + "/du_files"
-		exec('sys.path.append('+"'"+ruta+"'"+')')
+		exec('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
 		exec ("from du_files import "+du)
 		exec(du+".invoker=outgoing_invoke")# read file
 		print(du+" charged")
@@ -418,11 +524,11 @@ if __name__ == "__main__":
 	log = logging.getLogger('werkzeug')
 	log.setLevel(logging.ERROR)
 
-	# Launch the stats creator thread
+	# Launch the stats file creator thread
 	threading.Thread(target=create_stats, args=(agent_stats_interval,)).start()
 
-	# Laucnch the IP publisher thread
-	threading.Thread(target=local_publisher.announceAgent, args=(my_circle_ID, my_agent_ID, local_port)).start()
+	# Launch the grant file creator thread
+	threading.Thread(target=create_grant, args=(agent_grant_interval,agent_config_dict['GRANT_LEVEL'],local_port,)).start()
 	
 	# Launch invoke listener thread
 	#Process(target=flaskThreaded, args=(local_port,)).start()

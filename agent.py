@@ -44,7 +44,7 @@ all_dus = []
 parallel_du_index = 0
 
 # FIFO queue that passes stats to the stats file creator thread
-sats_queue = queue.Queue(maxsize=0)
+stats_queue = queue.Queue(maxsize=0)
 
 # FIFO queue that passes the changes of grant to the grant file creator thread
 grant_queue = queue.Queue(maxsize=0)
@@ -166,6 +166,9 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 	if remote_du == 'du_10000':
 		#metemos las dus en una lista y hacemos un contador saturado sobre los indices de esa lista     
 		remote_du = all_dus[parallel_du_index]
+		if remote_du == 'du_0':
+			parallel_du_index += 1
+			remote_du = all_dus[parallel_du_index]
 		parallel_du_index = (parallel_du_index+1) % len(all_dus)
 		invoked_du[0] = remote_du
 		print("Llamada a funcion parallel, la du afortunada sera: ", remote_du)
@@ -173,6 +176,9 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 	if remote_du == 'du_5000':
 		#metemos las dus en una lista y hacemos un contador saturado sobre los indices de esa lista     
 		remote_du = all_dus[parallel_du_index]
+		if remote_du == 'du_0':
+			parallel_du_index += 1
+			remote_du = all_dus[parallel_du_index]
 		parallel_du_index = (parallel_du_index+1) % len(all_dus)
 		invoked_du[0] = remote_du
 		print("Llamada a funcion recursiva, la du afortunada sera: ", remote_du)
@@ -278,6 +284,33 @@ def create_agent(grant, project_name, fs=False, agent_0=False):
 	print("     Grant    = ", grant)
 	print("     FSPath   = ", fs)
 	print("----------------------------------------------------------------------------------------------------\n")
+
+
+	# ###### SOLO  PARA PRUEBAS ######
+	# circle_config_dict = loader.load_dictionary(project_path + os.sep + "config" + os.sep + "config.json")
+	# lan_mode = circle_config_dict['LAN']
+
+	# # Get IPs and ports
+	# (_, ext_ip, ext_port, int_ip) = get_ip_info(include_internal=True)
+
+	# # Create and fill dictionary with initial data
+	# grant_dictionary = {}
+	# grant_dictionary[my_agent_ID] = {}
+	# grant_dictionary[my_agent_ID]["GRANT"] = grant
+	# if lan_mode=='TRUE': 	# If no internal port is given, use externals
+	# 	grant_dictionary[my_agent_ID]["IP"] = ext_ip
+	# 	grant_dictionary[my_agent_ID]["PORT"] = ext_port
+	# else: 				# Use internal IP and port
+	# 	grant_dictionary[my_agent_ID]["IP"] = int_ip
+	# 	grant_dictionary[my_agent_ID]["PORT"] = int_port
+
+	# agent_X_grant_file_path = project_path + os.sep + "distributed" + os.sep + "agents_grant" + os.sep + my_agent_ID+"_grant.json"
+	# agents_grant_file_path = project_path + os.sep + "distributed" + os.sep + "agents_grant.json"
+
+	# # Internal function to write the "agent_X_grant.json" file consumed by the deployer
+	# print("Grant file will be updated with: ", grant_dictionary)
+	# loader.write_dictionary(grant_dictionary, agent_X_grant_file_path)
+	# ################################
 
 
 
@@ -447,11 +480,6 @@ def check_port_available(port):
 #####   AGENT MAIN   #####
 if __name__ == "__main__":
 	print("Starting agent...")
-
-	# if(platform.system()=="Windows"):
-	# 	fs = os.environ['HOMEDRIVE'] + os.environ['HOMEPATH']+os.sep+"cloudbook"
-	# else:
-	# 	fs = "/etc/cloudbook"
 
 	# Load agent config file
 	agent_id = sys.argv[1]

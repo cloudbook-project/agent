@@ -500,6 +500,27 @@ if __name__ == "__main__":
 
 	print ("my_agent_ID = " + my_agent_ID)
 
+	# Check the first port available from 5000 (included) onwards
+	local_port = 5000
+	while not check_port_available(local_port):
+		local_port += 1
+	print("The first port available from 5000 onwards is: ", local_port)
+
+
+	# LAUNCH THREADS
+	# Launch invoke listener thread
+	#Process(target=flaskThreaded, args=(local_port,)).start()
+	threading.Thread(target=flaskThreaded, args=[local_port]).start()
+	#flaskThreaded(local_port)
+
+	# Launch the stats file creator thread
+	threading.Thread(target=create_stats, args=(agent_stats_interval,)).start()
+
+	# Launch the grant file creator thread
+	threading.Thread(target=create_grant, args=(agent_grant_interval,agent_config_dict['GRANT_LEVEL'],local_port,)).start()
+
+
+	# LOAD DEPLOYABLE UNITS
 	print ("Loading deployable units for agent " + my_agent_ID + "...")
 	#cloudbook_dict_agents = loader.load_cloudbook_agents()
 
@@ -509,27 +530,15 @@ if __name__ == "__main__":
 	cloudbookjson_file_path = fs_path + os.sep + "cloudbook.json"
 	while not os.path.exists(cloudbookjson_file_path):
 		time.sleep(0.1)
-
 	while(os.stat(cloudbookjson_file_path).st_size==0):
 		continue
+
 	# Check file format
 	cloudbook_dict_agents = loader.load_cloudbook(cloudbookjson_file_path)
 	
 	# Load the DUs that belong to this agent.
 	du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
 	print("My du_list: ", du_list)
-
-	# Check the first port available from 5000 (included) onwards
-	local_port = 5000
-	while not check_port_available(local_port):
-		local_port += 1
-	print("The first port available from 5000 onwards is: ", local_port)
-
-	# Launch the stats file creator thread
-	threading.Thread(target=create_stats, args=(agent_stats_interval,)).start()
-
-	# Launch the grant file creator thread
-	threading.Thread(target=create_grant, args=(agent_grant_interval,agent_config_dict['GRANT_LEVEL'],local_port,)).start()
 
 	# Get all dus
 	for i in cloudbook_dict_agents:
@@ -557,10 +566,5 @@ if __name__ == "__main__":
 	# Set up the logger
 	log = logging.getLogger('werkzeug')
 	log.setLevel(logging.ERROR)
-	
-	# Launch invoke listener thread
-	#Process(target=flaskThreaded, args=(local_port,)).start()
-	threading.Thread(target=flaskThreaded, args=[local_port]).start()
-	#flaskThreaded(local_port)
 
 	print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")

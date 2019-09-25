@@ -525,6 +525,12 @@ if __name__ == "__main__":
 		local_port += 1
 	print("The first port available from 5000 onwards is: ", local_port)
 
+	# Launch the stats file creator thread
+	threading.Thread(target=create_stats, args=(agent_stats_interval,)).start()
+
+	# Launch the grant file creator thread
+	threading.Thread(target=create_grant, args=(agent_grant_interval,agent_config_dict['GRANT_LEVEL'],local_port,)).start()
+
 	# Get all dus
 	for i in cloudbook_dict_agents:
 		all_dus.append(i)
@@ -551,12 +557,6 @@ if __name__ == "__main__":
 	# Set up the logger
 	log = logging.getLogger('werkzeug')
 	log.setLevel(logging.ERROR)
-
-	# Launch the stats file creator thread
-	threading.Thread(target=create_stats, args=(agent_stats_interval,)).start()
-
-	# Launch the grant file creator thread
-	threading.Thread(target=create_grant, args=(agent_grant_interval,agent_config_dict['GRANT_LEVEL'],local_port,)).start()
 	
 	# Launch invoke listener thread
 	#Process(target=flaskThreaded, args=(local_port,)).start()

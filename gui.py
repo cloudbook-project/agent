@@ -133,6 +133,7 @@ class GeneralInfoTab (ttk.Frame):
         else:
         	proc = subprocess.Popen("python3 agent.py "+ agent_id + " " + self.project_name, shell=True, preexec_fn=os.setsid)
         self.agent_pid_dict[agent_id] = proc
+        time.sleep(2)
         app.refresh()
         
     #Functionality of the "Stop" button.

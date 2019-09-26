@@ -1,3 +1,0 @@
-{0: {'AGENT_ID': 'agent_0', 'DISTRIBUTED_FS': 'C:\\Users\\jramosdi.NSN-INTRA/cloudbook/distributed', 'CIRCLE_ID': 'LOCAL', 'GRANT_LEVEL': 'HIGH'}, 1: {'AGENT_ID': 'agent_0S6EXPIRVQQX70M83TLN', 'DISTRIBUTED_FS': 'C:\\Users\\jramosdi.NSN-INTRA/cloudbook/distributed', 'CIRCLE_ID': 'LOCAL', 'GRANT_LEVEL': 'HIGH'}, 2: {'AGENT_ID': 'agent_IZJ6VMLJE07FETE0ZEMB', 'DISTRIBUTED_FS': 'C:\\Users\\jramosdi.NSN-INTRA/cloudbook/distributed', 'CIRCLE_ID': 'LOCAL', 'GRANT_LEVEL': 'HIGH'}, 3: {'AGENT_ID': 'agent_L5MNSWI9K1IARNSPEH6R', 'DISTRIBUTED_FS': 'C:\\Users\\jramosdi.NSN-INTRA/cloudbook/distributed', 'CIRCLE_ID': 'LOCAL', 'GRANT_LEVEL': 'HIGH'}}
-Active processes:  {} 
-

@@ -212,8 +212,8 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 	print ("remote agent", remote_agent)
 
 	try:
-		desired_host_ip_port = agents_grant[agent_id]['IP'] + ":" + agents_grant[agent_id]['PORT']
-		print("TEST: HOST: ",desired_host_ip_port)
+		desired_host_ip_port = agents_grant[remote_agent]['IP'] + ":" + str(agents_grant[remote_agent]['PORT'])
+		print("Host ip and port: ", desired_host_ip_port)
 	except Exception as e:
 		print("ERROR: cannot find the ip and port for invoking the desired agent!")
 		raise e 	# Maybe set alarm???
@@ -353,14 +353,14 @@ def create_stats(t1):
 		current_time = time.monotonic()
 		while not stats_queue.empty():
 			item = stats_queue.get()
-			print("New stat: ", item)
+			#print("New stat: ", item)
 
 			# Add data to dictionary
 			try:
 				invoker = item['invoker']
 				invoked = item['invoked']
 			except:
-				print("There was a problem with the stat item obtained from the queue. Key invoker/invoked not present")
+				print("ERROR: There was a problem with the stat item obtained from the queue. Key invoker/invoked not present")
 
 			try:
 				if invoker != None:
@@ -391,8 +391,11 @@ def create_grant(agent_grant_interval, init_grant, int_port=0):
 	print("Agent info (grant,ip,port) file creator thread starts execution")
 	time_start = time.monotonic()
 
-	# Get IPs and ports
+	# Get IPs and ports and verify they are correct
 	(_, ext_ip, ext_port, int_ip) = get_ip_info(include_internal=True)
+	while ext_ip==None or ext_port==None or int_ip==None:
+		(_, ext_ip, ext_port, int_ip) = get_ip_info(include_internal=True)
+	print("ext_ip, ext_port, int_ip, int_port:", ext_ip, ext_port, int_ip, int_port)
 
 	# Create and fill dictionary with initial data
 	grant_dictionary = {}
@@ -410,16 +413,19 @@ def create_grant(agent_grant_interval, init_grant, int_port=0):
 
 	# Internal function to write the "agent_X_grant.json" file consumed by the deployer
 	def write_agent_X_grant_file():
-		print("Grant file will be updated with: ", grant_dictionary)
+		#print("Grant file will be updated with: ", grant_dictionary)
 		loader.write_dictionary(grant_dictionary, agent_X_grant_file_path)
 
 	# Internal function to load the "agents_grant.json" file created by the deployer
 	def read_agents_grant_file():
 		global agents_grant
 		agents_grant = loader.load_dictionary(agents_grant_file_path)
-		print("agents_grant.json has been read.\n agents_grant = ", agents_grant)
+		#print("agents_grant.json has been read.\n agents_grant = ", agents_grant)
 
 	write_agent_X_grant_file()
+	while not os.path.exists(agents_grant_file_path):
+		print("Waiting for agents_grant.json (", my_agent_ID,")")
+		time.sleep(1)
 	read_agents_grant_file()
 	grant = None
 
@@ -429,15 +435,15 @@ def create_grant(agent_grant_interval, init_grant, int_port=0):
 		# While there is data in the queue, analyze it
 		while not grant_queue.empty():
 			item = grant_queue.get()
-			print("Grant item retrieved from queue: ", item)
+			#print("Grant item retrieved from queue: ", item)
 			try:
 				item_grant = item['grant']
 				if item_grant=='HIGH' or item_grant=='MEDIUM' or item_grant=='LOW':
 					grant = item_grant
 				else:
-					print("The grant obtained from the queue is not valid. Invalid value.")
+					print("ERROR: The grant obtained from the queue is not valid. Invalid value.")
 			except:
-				print("There was a problem with the grant item obtained from the queue. Invalid key.")
+				print("ERROR: There was a problem with the grant item obtained from the queue. Invalid key.")
 
 		# When the the interval time expires
 		if current_time-time_start >= agent_grant_interval:
@@ -446,7 +452,7 @@ def create_grant(agent_grant_interval, init_grant, int_port=0):
 			# Update dictionary with new data (grant)
 			if grant!= None:
 				grant_dictionary[my_agent_ID]["GRANT"] = grant
-				print('Grant dict updated')
+				#print('Grant dict updated')
 
 			# Update also IP/port ??? --> call get_ip_info() again and update if necessary
 			#grant_dictionary[my_agent_ID]["IP"] = ip
@@ -517,7 +523,7 @@ if __name__ == "__main__":
 	threading.Thread(target=create_stats, args=(agent_stats_interval,)).start()
 
 	# Launch the grant file creator thread
-	threading.Thread(target=create_grant, args=(agent_grant_interval,agent_config_dict['GRANT_LEVEL'],local_port,)).start()
+	threading.Thread(target=create_grant, args=(agent_grant_interval,my_grant,local_port,)).start()
 
 
 	# LOAD DEPLOYABLE UNITS
@@ -562,6 +568,11 @@ if __name__ == "__main__":
 		exec ("from du_files import "+du)
 		exec(du+".invoker=outgoing_invoke")# read file
 		print(du+" charged")
+
+	# while not os.path.exists(cloudbookjson_file_path):
+	# 	pass
+	# agents_grant = loader.load_dictionary(agents_grant_file_path)
+	# print("agents_grant.json has been read.\n agents_grant = ", agents_grant)
 
 	# Set up the logger
 	log = logging.getLogger('werkzeug')

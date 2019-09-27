@@ -276,7 +276,7 @@ def create_agent(grant, project_name, fs=False, agent_0=False):
 	agent_config_dict['DISTRIBUTED_FS'] = fs
 
 	# Write dictionary in file
-	config_file_path = poject_path + os.sep + "config" + os.sep + "config_"+my_agent_ID+".json"
+	config_file_path = poject_path + os.sep + "agents" + os.sep + "config_"+my_agent_ID+".json"
 	loader.write_dictionary(agent_config_dict, config_file_path)
 
 	print("\n---  NEW AGENT CREATED  ----------------------------------------------------------------------------")
@@ -286,41 +286,13 @@ def create_agent(grant, project_name, fs=False, agent_0=False):
 	print("----------------------------------------------------------------------------------------------------\n")
 
 
-	# ###### SOLO  PARA PRUEBAS ######
-	# circle_config_dict = loader.load_dictionary(project_path + os.sep + "config" + os.sep + "config.json")
-	# lan_mode = circle_config_dict['LAN']
-
-	# # Get IPs and ports
-	# (_, ext_ip, ext_port, int_ip) = get_ip_info(include_internal=True)
-
-	# # Create and fill dictionary with initial data
-	# grant_dictionary = {}
-	# grant_dictionary[my_agent_ID] = {}
-	# grant_dictionary[my_agent_ID]["GRANT"] = grant
-	# if lan_mode=='TRUE': 	# If no internal port is given, use externals
-	# 	grant_dictionary[my_agent_ID]["IP"] = ext_ip
-	# 	grant_dictionary[my_agent_ID]["PORT"] = ext_port
-	# else: 				# Use internal IP and port
-	# 	grant_dictionary[my_agent_ID]["IP"] = int_ip
-	# 	grant_dictionary[my_agent_ID]["PORT"] = int_port
-
-	# agent_X_grant_file_path = project_path + os.sep + "distributed" + os.sep + "agents_grant" + os.sep + my_agent_ID+"_grant.json"
-	# agents_grant_file_path = project_path + os.sep + "distributed" + os.sep + "agents_grant.json"
-
-	# # Internal function to write the "agent_X_grant.json" file consumed by the deployer
-	# print("Grant file will be updated with: ", grant_dictionary)
-	# loader.write_dictionary(grant_dictionary, agent_X_grant_file_path)
-	# ################################
-
-
-
 # This function is used by the GUI. Modifies the the grant level and/or the FS of the current agent according to the parameters given.
 def edit_agent(agent_id, project_name, new_grant='', new_fs=''):
 	if new_grant=='' and new_fs=='':
 		return
 
-	config_file_path = cloudbook_path + os.sep + project_name + os.sep + "config" + os.sep + "config_"+agent_id+".json"
-	config_dict = loader.load_dictionary(config_file_path)
+	config_agent_file_path = cloudbook_path + os.sep + project_name + os.sep + "agents" + os.sep + "config_"+agent_id+".json"
+	config_dict = loader.load_dictionary(config_agent_file_path)
 
 	if(new_grant!=''):
 		config_dict["GRANT_LEVEL"] = new_grant
@@ -331,7 +303,7 @@ def edit_agent(agent_id, project_name, new_grant='', new_fs=''):
 	if(new_fs!=''):
 		config_dict["DISTRIBUTED_FS"] = new_fs
 
-	loader.write_dictionary(config_dict, config_file_path)
+	loader.write_dictionary(config_dict, config_agent_file_path)
 
 
 # This function launches the flask server in the port given as parameter.
@@ -491,14 +463,14 @@ if __name__ == "__main__":
 	agent_id = sys.argv[1]
 	project_name = sys.argv[2]
 	project_path = cloudbook_path + os.sep + project_name
-	agent_config_dict = loader.load_dictionary(project_path + os.sep + "config" + os.sep + "config_"+agent_id+".json")
+	agent_config_dict = loader.load_dictionary(project_path + os.sep + "agents" + os.sep + "config_"+agent_id+".json")
 
 	my_agent_ID = agent_config_dict["AGENT_ID"]
 	fs_path = agent_config_dict["DISTRIBUTED_FS"]
 	my_grant = agent_config_dict["GRANT_LEVEL"]
 
 	# Load circle config file
-	circle_config_dict = loader.load_dictionary(project_path + os.sep + "config" + os.sep + "config.json")
+	circle_config_dict = loader.load_dictionary(fs_path + os.sep + "config.json")
 
 	agent_stats_interval = circle_config_dict['AGENT_STATS_INTERVAL']
 	agent_grant_interval = circle_config_dict['AGENT_GRANT_INTERVAL']
@@ -568,11 +540,6 @@ if __name__ == "__main__":
 		exec ("from du_files import "+du)
 		exec(du+".invoker=outgoing_invoke")# read file
 		print(du+" charged")
-
-	# while not os.path.exists(cloudbookjson_file_path):
-	# 	pass
-	# agents_grant = loader.load_dictionary(agents_grant_file_path)
-	# print("agents_grant.json has been read.\n agents_grant = ", agents_grant)
 
 	# Set up the logger
 	log = logging.getLogger('werkzeug')

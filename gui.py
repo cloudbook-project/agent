@@ -39,16 +39,16 @@ def get_info():
         projects[proj]['agents_info'] = {}
 
         # The path to the config folder inside the project
-        configs_path = cloudbook_path + os.sep + proj + os.sep + "config"
+        agents_path = cloudbook_path + os.sep + proj + os.sep + "agents"
 
-        # List with the files inside "cloudbook/projectX/config/" folder
-        files = next(os.walk(configs_path))[2]
+        # List with the files inside "cloudbook/projectX/agents/" folder
+        files = next(os.walk(agents_path))[2]
 
-        # Cleaning. If file does not contain "config_" it is not an agent config file (eg. "config.json" or other stuff)
-        files = [file for file in files if 'config_' in file]
+        # Cleaning. If file does not contain "config_" it is not an agent config file
+        files = [file for file in files if 'config_' in file and ".json" in file]
 
         for file in files:
-            projects[proj]['agents_info'][files.index(file)] = loader.load_dictionary(configs_path + os.sep + file)
+            projects[proj]['agents_info'][files.index(file)] = loader.load_dictionary(agents_path + os.sep + file)
 
     print("PROJECTS:\n", projects)
 
@@ -152,16 +152,16 @@ class GeneralInfoTab (ttk.Frame):
     #Functionality of the "Remove" button.
     def remove(self, r, c):
         agent_id = self.agents_info[r-3]['AGENT_ID']
-        configs_path = cloudbook_path + os.sep + self.project_name + os.sep + "config"   # Path to "cloudbook/projectX/config/"
-        config_file_path = configs_path + os.sep + "config_" + agent_id + ".json"
+        agents_path = cloudbook_path + os.sep + self.project_name + os.sep + "agents"   # Path to "cloudbook/projectX/agents/"
+        config_agent_file_path = agents_path + os.sep + "config_" + agent_id + ".json"
 
         if agent_id in self.agent_pid_dict:
             print(agent_id + " is running! It must be stopped to be removed.")
             return
-        if os.path.exists(config_file_path):
-            os.remove(config_file_path)
+        if os.path.exists(config_agent_file_path):
+            os.remove(config_agent_file_path)
         else:
-            print("ERROR: could not find " + config_file_path + ". Removal aborted.")
+            print("ERROR: could not find " + config_agent_file_path + ". Removal aborted.")
             return
         app.refresh()
 

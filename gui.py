@@ -10,25 +10,32 @@ import agent
 import loader
 import time
 
+
+
+#####   GLOBAL VARIABLES   #####
+
 # Global variable to store information about all the agents of all the projects.
 projects = {}
 
+# Global variable to store the general path to cloudbook, used to access all files and folders needed
+if(platform.system()=="Windows"):
+	cloudbook_path = os.environ['HOMEDRIVE'] + os.environ['HOMEPATH'] + os.sep + "cloudbook"
+else:
+	cloudbook_path = "/etc/cloudbook"
 
-#This functions recovers the information about the different agents using their configuration files.
-#Then the information is saved on a variable that will be used later.
+
+
+#####   GUI FUNCTIONS   #####
+
+# This function recovers the information about the different agents using their configuration files.
+# Then the information is saved on a variable that will be used later.
 def get_info():
 	global projects         # Use the global variable projects
 	global cloudbook_path   # Use the global variable cloudbook_path
 
-	# Get the general path to cloudbook
-	if(platform.system()=="Windows"):
-		cloudbook_path = os.environ['HOMEDRIVE'] + os.environ['HOMEPATH'] + os.sep + "cloudbook"
-		if not os.path.exists(cloudbook_path):
-			os.makedirs(cloudbook_path)
-	else:
-		cloudbook_path = "/etc/cloudbook"
-		if not os.path.exists(cloudbook_path):
-			os.makedirs(cloudbook_path)
+	# Check the existence of the general path to cloudbook
+	if not os.path.exists(cloudbook_path):
+		os.makedirs(cloudbook_path)
 
 	# List with the folders inside "cloudbook/" folder. Each one represents a different project
 	projects_list = next(os.walk(cloudbook_path))[1]
@@ -55,6 +62,13 @@ def get_info():
 	return
 
 
+def on_closing():
+	if tk.messagebox.askokcancel("Quit", "Are you sure to exit the program?\nPlease, make sure no agents are running."):
+		os._exit(0)
+
+
+
+#####   GUI CLASSES   #####
 
 # This tab class includes all the information related to the different agents that live in the machine (in a project).
 class GeneralInfoTab (ttk.Frame):
@@ -63,14 +77,16 @@ class GeneralInfoTab (ttk.Frame):
 	agents_info = {}
 	project_name = ""
 
-	#Builds the layout and fills it.
+	# Builds the layout and fills it.
 	def __init__(self, *args, agents_info, project_name):
 		super().__init__(*args)
 
 		self.agents_info = agents_info
 		self.project_name = project_name
+		if not project_name in self.agent_pid_dict:
+			self.agent_pid_dict[self.project_name] = {}
 
-		print("Active processes: ", self.agent_pid_dict, "\n")
+		print("Active processes: ", self.agent_pid_dict[self.project_name], "\n")
 
 		self.label_welcome = ttk.Label(self)
 		self.label_welcome["text"] = ("Welcome to CloudBook user interface. Your agents are:")
@@ -89,27 +105,27 @@ class GeneralInfoTab (ttk.Frame):
 					if(j==w-3):
 						self.launch_button = ttk.Button(self, text="Launch", command=lambda r=i+2, c=j: self.launch(r, c))
 						self.launch_button.grid(column=j, row=i+2)
-						if self.agents_info[i-1]['AGENT_ID'] in self.agent_pid_dict:
+						if self.agents_info[i-1]['AGENT_ID'] in self.agent_pid_dict[self.project_name]:
 							self.launch_button.config(state="disabled")
 						else:
 							self.launch_button.config(state="normal")
 					elif(j==w-2):
 						self.stop_button = ttk.Button(self, text="Stop", command=lambda r=i+2, c=j: self.stop(r, c))
 						self.stop_button.grid(column=j, row=i+2)
-						if self.agents_info[i-1]['AGENT_ID'] in self.agent_pid_dict:
+						if self.agents_info[i-1]['AGENT_ID'] in self.agent_pid_dict[self.project_name]:
 							self.stop_button.config(state="normal")
 						else:
 							self.stop_button.config(state="disabled")
 					elif(j==w-1):
 						self.remove_button = ttk.Button(self, text="Remove", command=lambda r=i+2, c=j: self.remove(r, c))
 						self.remove_button.grid(column=j, row=i+2)
-						if self.agents_info[i-1]['AGENT_ID'] in self.agent_pid_dict:
+						if self.agents_info[i-1]['AGENT_ID'] in self.agent_pid_dict[self.project_name]:
 							self.remove_button.config(state="disabled")
 						else:
 							self.remove_button.config(state="normal")
 					elif(j==w-4):
 						self.cell=ttk.Label(self)
-						if self.agents_info[i-1]['AGENT_ID'] in self.agent_pid_dict:
+						if self.agents_info[i-1]['AGENT_ID'] in self.agent_pid_dict[self.project_name]:
 							self.cell["foreground"] = "green"
 							self.cell["text"] = "RUNNING"
 						else:
@@ -124,7 +140,7 @@ class GeneralInfoTab (ttk.Frame):
 						self.cell.grid(row=i+2, column=j)
 
 
-	#Functionality of the "Launch" button
+	# Functionality of the "Launch" button
 	def launch(self, r, c):
 		agent_id = self.agents_info[r-3]['AGENT_ID']
 		print("Launching agent", agent_id)
@@ -132,30 +148,30 @@ class GeneralInfoTab (ttk.Frame):
 			proc = subprocess.Popen("py agent.py "+ agent_id + " " + self.project_name, shell=True ,creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
 		else:
 			proc = subprocess.Popen("python3 agent.py "+ agent_id + " " + self.project_name, shell=True, preexec_fn=os.setsid)
-		self.agent_pid_dict[agent_id] = proc
+		self.agent_pid_dict[self.project_name][agent_id] = proc
 		time.sleep(2)
 		app.refresh()
 		
-	#Functionality of the "Stop" button.
+	# Functionality of the "Stop" button.
 	def stop(self, r, c):
 		agent_id = self.agents_info[r-3]['AGENT_ID']
-		print("Stopping agent", agent_id, self.agent_pid_dict[agent_id])
+		print("Stopping agent", agent_id, self.agent_pid_dict[self.project_name][agent_id])
 		if(platform.system()=="Windows"):
-			self.agent_pid_dict[agent_id].send_signal(signal.CTRL_BREAK_EVENT)
-			self.agent_pid_dict[agent_id].kill()
+			self.agent_pid_dict[self.project_name][agent_id].send_signal(signal.CTRL_BREAK_EVENT)
+			self.agent_pid_dict[self.project_name][agent_id].kill()
 		else:
-			os.killpg(os.getpgid(self.agent_pid_dict[agent_id].pid), signal.SIGTERM)
-		del  self.agent_pid_dict[agent_id]
-		print("Active processes: ", self.agent_pid_dict, "\n")
+			os.killpg(os.getpgid(self.agent_pid_dict[self.project_name][agent_id].pid), signal.SIGTERM)
+		del  self.agent_pid_dict[self.project_name][agent_id]
+		print("Active processes: ", self.agent_pid_dict[self.project_name], "\n")
 		app.refresh()
 
-	#Functionality of the "Remove" button.
+	# Functionality of the "Remove" button.
 	def remove(self, r, c):
 		agent_id = self.agents_info[r-3]['AGENT_ID']
 		agents_path = cloudbook_path + os.sep + self.project_name + os.sep + "agents"   # Path to "cloudbook/projectX/agents/"
 		config_agent_file_path = agents_path + os.sep + "config_" + agent_id + ".json"
 
-		if agent_id in self.agent_pid_dict:
+		if agent_id in self.agent_pid_dict[self.project_name]:
 			print(agent_id + " is running! It must be stopped to be removed.")
 			return
 		if os.path.exists(config_agent_file_path):
@@ -164,7 +180,6 @@ class GeneralInfoTab (ttk.Frame):
 			print("ERROR: could not find " + config_agent_file_path + ". Removal aborted.")
 			return
 		app.refresh()
-
 
 
 # This tab includes the information and tools to create a new agent.
@@ -219,6 +234,7 @@ class AddAgentTab(ttk.Frame):
 		#self.attach_circle = ttk.Button(self, text="Attach circle", command=self.attach)
 		self.create_circle.grid(column=1, row=7)
 	
+	# Functionality for the grant combobox selection
 	def switch(self, index):
 			switcher = {
 				0: "HIGH",
@@ -227,8 +243,7 @@ class AddAgentTab(ttk.Frame):
 			}  
 			return switcher.get(index, "No se ha seleccionado nada, se usará MEDIUM como valor por defecto.")
 	
-	#Functionality for create button. Recovers the already set information and
-	#calls the create_local_agent function located in the agent.py software.
+	# Functionality for create button. Recovers the already set information and calls the create_agent function from agent.py
 	def create(self):
 		grant = self.switch(self.grant_combo.current())
 		print("Grant selected: : ", grant)
@@ -239,15 +254,13 @@ class AddAgentTab(ttk.Frame):
 		agent.create_agent(grant=grant, project_name=self.project_name, fs=fspath, agent_0=self.is_agent_0.get())
 		app.refresh()
 	
-	#This button launches a new gui to select the folder for the FS path.
-	#This parameter is optional.
+	# This button launches a new gui to select the folder for the FS path. This parameter is optional.
 	def browse_FS_path(self):
 		filename = filedialog.askdirectory()
 		self.fspath["state"] = (tk.NORMAL)
 		self.fspath.insert(0,filename)
 		self.fspath["state"] = ("readonly")
 		print(filename)
-
 
 
 # Tab that contains the information of a specific agent located in the machine.
@@ -292,12 +305,9 @@ class AgentXTab(ttk.Frame):
 		self.browse_fs_path_button.grid(column=8, row=5)
 
 
-	#To be added when the functionality is implemented.
-	# def edit_circle_id(self):
-	#     print("En el campo pone: " + self.text.get() + " del agente " + self.agent['AGENT_ID'])
+	# To be added when the functionality is implemented.
 
-	#Functionality to edit the agent grant. It calls to the "edit_agent()" function in the 
-	# agent software.
+	# Functionality to edit the agent grant. It calls "edit_agent()" function in agent.py.
 	def set_grant(self):
 		def switch(index):
 			switcher = {
@@ -310,7 +320,7 @@ class AgentXTab(ttk.Frame):
 		agent.edit_agent(agent_id=self.agent['AGENT_ID'], project_name=self.project_name, new_grant=switch(self.combo.current()))
 		app.refresh()
 		
-	#This button launches a new gui to select another folder for the FS path. 
+	# Functionality of the browse button. Launches a folder selection gui to select the FS path. 
 	def browse_FS_path(self):
 		new_fs_path = filedialog.askdirectory()
 		self.fspath["state"] = (tk.NORMAL)
@@ -318,7 +328,6 @@ class AgentXTab(ttk.Frame):
 		self.fspath["state"] = ("readonly")
 		print("The new path for the agent " + self.agent['AGENT_ID'] + " is: " + new_fs_path)
 		agent.edit_agent(agent_id=self.agent['AGENT_ID'], project_name=self.project_name, new_fs=new_fs_path)
-
 
 
 # Tab that represents a project. It conatins all the tabs refering to a project.
@@ -344,12 +353,10 @@ class ProjectTab(ttk.Frame):
 		self.pack(expand=True, fill="both")
 
 
-
 # New tab reserved for future use.
 # class Tab3(ttk.Frame):
 #     def __init__(self, *args):
 #         super().__init__(*args)
-
 
 
 # Class to build the general framework of the GUI.
@@ -413,14 +420,15 @@ class Application(ttk.Frame):
 		self.notebook.pack(expand=True, fill="both")
 		self.pack(expand=True, fill="both")
 
-def on_closing():
-	if tk.messagebox.askokcancel("Quit", "Are you sure to exit the program?\nPlease, make sure no agents are running."):
-		os._exit(0)
 
 
-#Start application
+#####   GUI MAIN   #####
+
+# Start application
 get_info()
 master = tk.Tk()
 app = Application(master)
 master.protocol("WM_DELETE_WINDOW", on_closing)
+
+# Run the application forever (until closed)
 app.mainloop()

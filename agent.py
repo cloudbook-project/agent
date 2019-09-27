@@ -10,7 +10,10 @@ import queue
 import socket
 import random, string
 
+
+
 #####   GLOBAL VARIABLES   #####
+
 # Identifier of this agent
 my_agent_ID = "None"
 
@@ -49,9 +52,9 @@ stats_queue = queue.Queue(maxsize=0)
 # FIFO queue that passes the changes of grant to the grant file creator thread
 grant_queue = queue.Queue(maxsize=0)
 
-# Files and folders
+# Global variable to store the general path to cloudbook, used to access all files and folders needed
 if(platform.system()=="Windows"):
-	cloudbook_path = os.environ['HOMEDRIVE'] + os.environ['HOMEPATH']+os.sep+"cloudbook"
+	cloudbook_path = os.environ['HOMEDRIVE'] + os.environ['HOMEPATH'] + os.sep + "cloudbook"
 else:
 	cloudbook_path = "/etc/cloudbook/"
 
@@ -67,7 +70,6 @@ project_path = "None"
 # 	"agent_OMRZ22CQB157H3POXG3A": {"GRANT": "LOW", "IP": "192.168.1.44", "PORT": 5003}
 # }
 agents_grant = {}
-# agents_grant[agent_id]['IP'] + ":" + agents_grant[agent_id]['PORT']
 
 
 

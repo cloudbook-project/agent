@@ -36,7 +36,7 @@ du_list = []
 agent_config_dict = {}
 
 # Dictionary of circle configuration
-circle_config_dict = {}
+configjson_dict = {}
 
 # Global variable to define working mode
 #LOCAL_MODE = False
@@ -361,7 +361,7 @@ def create_stats(t1):
 
 # Target function of the grant file creator thread. Implements the consumer of the producer/consumer model using  grant_queue.
 # If the internal port is given it is used with the local IP. Otherwise, external IP and port are used.
-def create_grant(agent_grant_interval, init_grant, int_port=0):
+def create_grant(agent_grant_interval, init_grant, int_port=0, fs_path=''):
 	print("Agent info (grant,ip,port) file creator thread starts execution")
 	time_start = time.monotonic()
 
@@ -382,8 +382,14 @@ def create_grant(agent_grant_interval, init_grant, int_port=0):
 		grant_dictionary[my_agent_ID]["IP"] = int_ip
 		grant_dictionary[my_agent_ID]["PORT"] = int_port
 
+	# Check if fs_path is not empty
+	if fs_path=='':
+		fs_path = poject_path + os.sep + "distributed"
+		print("Path to distributed filesystem was not set in the agent, default will be used: ")
+
 	agent_X_grant_file_path = project_path + os.sep + "distributed" + os.sep + "agents_grant" + os.sep + my_agent_ID+"_grant.json"
 	agents_grant_file_path = project_path + os.sep + "distributed" + os.sep + "agents_grant.json"
+	cloudbookjson_file_path = fs_path + os.sep + "cloudbook.json"
 
 	# Internal function to write the "agent_X_grant.json" file consumed by the deployer
 	def write_agent_X_grant_file():
@@ -396,13 +402,88 @@ def create_grant(agent_grant_interval, init_grant, int_port=0):
 		agents_grant = loader.load_dictionary(agents_grant_file_path)
 		#print("agents_grant.json has been read.\n agents_grant = ", agents_grant)
 
+	# Internal function to load the "cloudbook.json" file created by the deployer
+	def read_cloudbook_file():
+		global cloudbook_dict_agents
+		global all_dus
+		cloudbook_dict_agents = loader.load_dictionary(cloudbookjson_file_path)
+		#print("cloudbook.json has been read.\n cloudbook_dict_agents = ", cloudbook_dict_agents)
+
+		# Get all dus
+		all_dus = []
+		for i in cloudbook_dict_agents:
+			all_dus.append(i)
+
+	# Internal function to import the DUs in the agent
+	def import_DUs_into_agent():
+		global du_list
+
+		# Load the DUs that belong to this agent.
+		du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
+		print("My du_list: ", du_list)
+
+		sys.path.append(fs_path)
+		'''for du in du_list:
+			exec ("from du_files import "+du)
+			exec(du+".invoker=outgoing_invoke")'''
+
+		du_files_path = fs_path + os.sep + "du_files"
+		UNIX_du_files_path = du_files_path.replace(os.sep, "/")
+		for du in du_list:
+			print(du)
+			du_i_file_path = du_files_path + os.sep + du+".py"
+			while not os.path.exists(du_i_file_path):
+				time.sleep(0.1)
+			##OJO CON ESTO QUE HAY QUE PROBARLO BIEN BIEN
+			exec('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
+			# exec("from du_files import "+du)
+			globals()[du] = __import__(du, fromlist=["du_files"])
+			globals()[du+'invoker'] = outgoing_invoke
+			#exec(du+".invoker=outgoing_invoke")# read file
+			print(du+" charged")
+			
+			# exec('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
+			# print('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
+			# exec("from du_files import "+du)
+			# print("from du_files import "+du)
+			# exec(du+".invoker=outgoing_invoke")# read file
+			# print(du+".invoker=outgoing_invoke")# read file
+			# print(du+" charged")
+
+	# Deletes the previously imported DUs from the agent (if there was any)
+	# def delete_imported_DUs_from_agent():
+	# 	sys.path.append(fs_path)
+	# 	'''for du in du_list:
+	# 		exec ("from du_files import "+du)
+	# 		exec(du+".invoker=outgoing_invoke")'''
+
+	# 	du_files_path = fs_path + os.sep + "du_files"
+	# 	UNIX_du_files_path = du_files_path.replace(os.sep, "/")
+	# 	for du in du_list:
+	# 		print(du)
+	# 		du_i_file_path = du_files_path + os.sep + du+".py"
+	# 		while not os.path.exists(du_i_file_path):
+	# 			time.sleep(0.1)
+	# 		##OJO CON ESTO QUE HAY QUE PROBARLO BIEN BIEN
+			
+	# 		exec('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
+	# 		exec("from du_files import "+du)
+	# 		exec(du+".invoker=outgoing_invoke")# read file
+	# 		print(du+" charged")
+
+	# Do the necessary writes and reads
+	print('agent_X_grant_file_path = ', agent_X_grant_file_path)
+	print('agents_grant_file_path = ', agents_grant_file_path)
+	print('cloudbookjson_file_path = ', cloudbookjson_file_path)
 	write_agent_X_grant_file()
-	while not os.path.exists(agents_grant_file_path):
-		print("Waiting for agents_grant.json (", my_agent_ID,")")
+	while not os.path.exists(agents_grant_file_path) or not os.path.exists(cloudbookjson_file_path) or os.stat(cloudbookjson_file_path).st_size==0:
+		print("Waiting for agents_grant.json and cloudbook.json (", my_agent_ID,")")
 		time.sleep(1)
 	read_agents_grant_file()
-	grant = None
+	read_cloudbook_file()
+	import_DUs_into_agent()
 
+	grant = None
 	while True:
 		current_time = time.monotonic()
 
@@ -472,20 +553,24 @@ if __name__ == "__main__":
 	my_grant = agent_config_dict["GRANT_LEVEL"]
 
 	# Load circle config file
-	circle_config_dict = loader.load_dictionary(fs_path + os.sep + "config.json")
+	configjson_dict = loader.load_dictionary(fs_path + os.sep + "config.json")
 
-	agent_stats_interval = circle_config_dict['AGENT_STATS_INTERVAL']
-	agent_grant_interval = circle_config_dict['AGENT_GRANT_INTERVAL']
-	lan_mode = circle_config_dict['LAN']
+	agent_stats_interval = configjson_dict['AGENT_STATS_INTERVAL']
+	agent_grant_interval = configjson_dict['AGENT_GRANT_INTERVAL']
+	lan_mode = configjson_dict['LAN']
 
 	print ("my_agent_ID = " + my_agent_ID)
 
-	# Check the first port available from 5000 (included) onwards
-	local_port = 5000
-	while not check_port_available(local_port):
-		local_port += 1
-	print("The first port available from 5000 onwards is: ", local_port)
-
+	# Check lan mode is on or off to use internal or external ips and ports respectively
+	if lan_mode:
+		# Check the first port available from 5000 (included) onwards
+		local_port = 5000
+		while not check_port_available(local_port):
+			local_port += 1
+		print("Lan mode ON: the first port available from 5000 onwards is ", local_port)
+	else:
+		local_port = 0
+		print("Lan mode OFF: using external ip and port.")
 
 	# LAUNCH THREADS
 	# Launch invoke listener thread
@@ -497,32 +582,137 @@ if __name__ == "__main__":
 	threading.Thread(target=create_stats, args=(agent_stats_interval,)).start()
 
 	# Launch the grant file creator thread
-	threading.Thread(target=create_grant, args=(agent_grant_interval,my_grant,local_port,)).start()
+	#threading.Thread(target=create_grant, args=(agent_grant_interval,my_grant,local_port,fs_path,)).start()
+	##############################################################################################################
+	##############################################################################################################
+	##############################################################################################################
+	init_grant = my_grant
+	int_port = local_port
+	##########################################
+	print("Agent info (grant,ip,port) file creator thread starts execution")
+	time_start = time.monotonic()
 
+	# Get IPs and ports and verify they are correct
+	(_, ext_ip, ext_port, int_ip) = get_ip_info(include_internal=True)
+	while ext_ip==None or ext_port==None or int_ip==None:
+		(_, ext_ip, ext_port, int_ip) = get_ip_info(include_internal=True)
+	print("ext_ip, ext_port, int_ip, int_port:", ext_ip, ext_port, int_ip, int_port)
 
-	# LOAD DEPLOYABLE UNITS
-	print ("Loading deployable units for agent " + my_agent_ID + "...")
-	#cloudbook_dict_agents = loader.load_cloudbook_agents()
+	# Create and fill dictionary with initial data
+	grant_dictionary = {}
+	grant_dictionary[my_agent_ID] = {}
+	grant_dictionary[my_agent_ID]["GRANT"] = init_grant
+	if int_port==0: 	# If no internal port is given, use externals
+		grant_dictionary[my_agent_ID]["IP"] = ext_ip
+		grant_dictionary[my_agent_ID]["PORT"] = ext_port
+	else: 				# Use internal IP and port
+		grant_dictionary[my_agent_ID]["IP"] = int_ip
+		grant_dictionary[my_agent_ID]["PORT"] = int_port
 
-	# It will only contain info about agent_id : du_assigned (not IP)
-	# Output file from DEPLOYER
-	# It is necessary to wait until cloudbook.json exists
+	# Check if fs_path is not empty
+	if fs_path=='':
+		fs_path = poject_path + os.sep + "distributed"
+		print("Path to distributed filesystem was not set in the agent, default will be used: ")
+
+	agent_X_grant_file_path = project_path + os.sep + "distributed" + os.sep + "agents_grant" + os.sep + my_agent_ID+"_grant.json"
+	agents_grant_file_path = project_path + os.sep + "distributed" + os.sep + "agents_grant.json"
 	cloudbookjson_file_path = fs_path + os.sep + "cloudbook.json"
-	while not os.path.exists(cloudbookjson_file_path):
-		time.sleep(0.1)
-	while(os.stat(cloudbookjson_file_path).st_size==0):
-		continue
 
-	# Check file format
-	cloudbook_dict_agents = loader.load_cloudbook(cloudbookjson_file_path)
-	
+	# Internal function to write the "agent_X_grant.json" file consumed by the deployer
+	def write_agent_X_grant_file():
+		#print("Grant file will be updated with: ", grant_dictionary)
+		loader.write_dictionary(grant_dictionary, agent_X_grant_file_path)
+
+	# Internal function to load the "agents_grant.json" file created by the deployer
+	def read_agents_grant_file():
+		global agents_grant
+		agents_grant = loader.load_dictionary(agents_grant_file_path)
+		#print("agents_grant.json has been read.\n agents_grant = ", agents_grant)
+
+	# Internal function to load the "cloudbook.json" file created by the deployer
+	def read_cloudbook_file():
+		global cloudbook_dict_agents
+		global all_dus
+		cloudbook_dict_agents = loader.load_dictionary(cloudbookjson_file_path)
+		#print("cloudbook.json has been read.\n cloudbook_dict_agents = ", cloudbook_dict_agents)
+
+		# Get all dus
+		all_dus = []
+		for i in cloudbook_dict_agents:
+			all_dus.append(i)
+
+	# # Internal function to import the DUs in the agent
+	# def import_DUs_into_agent():
+	# 	global du_list
+
+	# 	# Load the DUs that belong to this agent.
+	# 	du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
+	# 	print("My du_list: ", du_list)
+
+	# 	sys.path.append(fs_path)
+	# 	'''for du in du_list:
+	# 		exec ("from du_files import "+du)
+	# 		exec(du+".invoker=outgoing_invoke")'''
+
+	# 	du_files_path = fs_path + os.sep + "du_files"
+	# 	UNIX_du_files_path = du_files_path.replace(os.sep, "/")
+	# 	for du in du_list:
+	# 		print(du)
+	# 		du_i_file_path = du_files_path + os.sep + du+".py"
+	# 		while not os.path.exists(du_i_file_path):
+	# 			time.sleep(0.1)
+	# 		##OJO CON ESTO QUE HAY QUE PROBARLO BIEN BIEN
+	# 		exec('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
+	# 		# exec("from du_files import "+du)
+	# 		globals()[du] = __import__(du, fromlist=["du_files"])
+	# 		globals()[du+'.invoker'] = outgoing_invoke
+	# 		#exec(du+".invoker=outgoing_invoke")# read file
+	# 		print(du+" charged")
+			
+			# exec('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
+			# print('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
+			# exec("from du_files import "+du)
+			# print("from du_files import "+du)
+			# exec(du+".invoker=outgoing_invoke")# read file
+			# print(du+".invoker=outgoing_invoke")# read file
+			# print(du+" charged")
+
+	# Deletes the previously imported DUs from the agent (if there was any)
+	# def delete_imported_DUs_from_agent():
+	# 	sys.path.append(fs_path)
+	# 	'''for du in du_list:
+	# 		exec ("from du_files import "+du)
+	# 		exec(du+".invoker=outgoing_invoke")'''
+
+	# 	du_files_path = fs_path + os.sep + "du_files"
+	# 	UNIX_du_files_path = du_files_path.replace(os.sep, "/")
+	# 	for du in du_list:
+	# 		print(du)
+	# 		du_i_file_path = du_files_path + os.sep + du+".py"
+	# 		while not os.path.exists(du_i_file_path):
+	# 			time.sleep(0.1)
+	# 		##OJO CON ESTO QUE HAY QUE PROBARLO BIEN BIEN
+			
+	# 		exec('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
+	# 		exec("from du_files import "+du)
+	# 		exec(du+".invoker=outgoing_invoke")# read file
+	# 		print(du+" charged")
+
+	# Do the necessary writes and reads
+	print('agent_X_grant_file_path = ', agent_X_grant_file_path)
+	print('agents_grant_file_path = ', agents_grant_file_path)
+	print('cloudbookjson_file_path = ', cloudbookjson_file_path)
+	write_agent_X_grant_file()
+	while not os.path.exists(agents_grant_file_path) or not os.path.exists(cloudbookjson_file_path) or os.stat(cloudbookjson_file_path).st_size==0:
+		print("Waiting for agents_grant.json and cloudbook.json (", my_agent_ID,")")
+		time.sleep(1)
+	read_agents_grant_file()
+	read_cloudbook_file()
+	#import_DUs_into_agent()
+
 	# Load the DUs that belong to this agent.
 	du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
 	print("My du_list: ", du_list)
-
-	# Get all dus
-	for i in cloudbook_dict_agents:
-		all_dus.append(i)
 
 	sys.path.append(fs_path)
 	'''for du in du_list:
@@ -537,11 +727,98 @@ if __name__ == "__main__":
 		while not os.path.exists(du_i_file_path):
 			time.sleep(0.1)
 		##OJO CON ESTO QUE HAY QUE PROBARLO BIEN BIEN
-		
 		exec('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
-		exec ("from du_files import "+du)
+		exec("from du_files import "+du)
+		# globals()[du] = __import__(du, fromlist=["du_files"])
+		# globals()[du+'invoker'] = outgoing_invoke
 		exec(du+".invoker=outgoing_invoke")# read file
 		print(du+" charged")
+
+	grant = None
+	while True:
+		current_time = time.monotonic()
+
+		# While there is data in the queue, analyze it
+		while not grant_queue.empty():
+			item = grant_queue.get()
+			#print("Grant item retrieved from queue: ", item)
+			try:
+				item_grant = item['grant']
+				if item_grant=='HIGH' or item_grant=='MEDIUM' or item_grant=='LOW':
+					grant = item_grant
+				else:
+					print("ERROR: The grant obtained from the queue is not valid. Invalid value.")
+			except:
+				print("ERROR: There was a problem with the grant item obtained from the queue. Invalid key.")
+
+		# When the the interval time expires
+		if current_time-time_start >= agent_grant_interval:
+			time_start += agent_grant_interval
+
+			# Update dictionary with new data (grant)
+			if grant!= None:
+				grant_dictionary[my_agent_ID]["GRANT"] = grant
+				#print('Grant dict updated')
+
+			# Update also IP/port ??? --> call get_ip_info() again and update if necessary
+			#grant_dictionary[my_agent_ID]["IP"] = ip
+			#grant_dictionary[my_agent_ID]["PORT"] = port
+
+			# Write dictionary in "agent_X_grant.json" and read dictionary from "agents_grant.json"
+			write_agent_X_grant_file()
+			read_agents_grant_file()
+			grant = None
+
+		# Wait 1 second to look for more data in the queue
+		time.sleep(1)
+
+	##############################################################################################################
+	##############################################################################################################
+	##############################################################################################################
+
+
+	# # LOAD DEPLOYABLE UNITS
+	# print ("Loading deployable units for agent " + my_agent_ID + "...")
+	# #cloudbook_dict_agents = loader.load_cloudbook_agents()
+
+	# # It will only contain info about agent_id : du_assigned (not IP)
+	# # Output file from DEPLOYER
+	# # It is necessary to wait until cloudbook.json exists
+	# cloudbookjson_file_path = fs_path + os.sep + "cloudbook.json"
+	# while not os.path.exists(cloudbookjson_file_path):
+	# 	time.sleep(0.1)
+	# while(os.stat(cloudbookjson_file_path).st_size==0):
+	# 	continue
+
+	# # Check file format
+	# cloudbook_dict_agents = loader.load_cloudbook(cloudbookjson_file_path)
+	
+	# # Load the DUs that belong to this agent.
+	# du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
+	# print("My du_list: ", du_list)
+
+	# # Get all dus
+	# for i in cloudbook_dict_agents:
+	# 	all_dus.append(i)
+
+	# sys.path.append(fs_path)
+	# '''for du in du_list:
+	# 	exec ("from du_files import "+du)
+	# 	exec(du+".invoker=outgoing_invoke")'''
+
+	# du_files_path = fs_path + os.sep + "du_files"
+	# UNIX_du_files_path = du_files_path.replace(os.sep, "/")
+	# for du in du_list:
+	# 	print(du)
+	# 	du_i_file_path = du_files_path + os.sep + du+".py"
+	# 	while not os.path.exists(du_i_file_path):
+	# 		time.sleep(0.1)
+	# 	##OJO CON ESTO QUE HAY QUE PROBARLO BIEN BIEN
+		
+	# 	exec('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
+	# 	exec ("from du_files import "+du)
+	# 	exec(du+".invoker=outgoing_invoke")# read file
+	# 	print(du+" charged")
 
 	# Set up the logger
 	log = logging.getLogger('werkzeug')

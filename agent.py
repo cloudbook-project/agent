@@ -71,6 +71,8 @@ project_path = "None"
 # }
 agents_grant = {}
 
+# Global boolean variable for the state of the dus that the agent has to load (True if they have been loaded, False otherwise)
+dus_loaded = False
 
 
 #####   APPLICATION TO SEND AND RECEIVE FUNCTION REQUESTS   #####
@@ -100,6 +102,10 @@ def invoke(configuration = None):
 	global du_list
 	global my_agent_ID
 	global stats_dict
+
+	while not dus_loaded:
+		print(my_agent_ID, ": Invoked but waiting for dus to be loaded.==========================================================================================================================================")
+		sleep(1)
 
 	print("=====AGENT: /INVOKE=====")
 	print(threading.get_ident())
@@ -165,7 +171,7 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 	remote_du = invoked_du[0] #TODO: Random between remote dus, if invoked fun is idempotent, it can result into multiple invocations
 	print ("remote du = ", remote_du)
 	###Round Robin: Circular planification
-	if remote_du == 'du_10000':
+	if remote_du == 'du_default':
 		#metemos las dus en una lista y hacemos un contador saturado sobre los indices de esa lista     
 		remote_du = all_dus[parallel_du_index]
 		if remote_du == 'du_0':
@@ -173,17 +179,17 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 			remote_du = all_dus[parallel_du_index]
 		parallel_du_index = (parallel_du_index+1) % len(all_dus)
 		invoked_du[0] = remote_du
-		print("Llamada a funcion parallel, la du afortunada sera: ", remote_du)
+	# 	print("Llamada a funcion parallel, la du afortunada sera: ", remote_du)
 
-	if remote_du == 'du_5000':
-		#metemos las dus en una lista y hacemos un contador saturado sobre los indices de esa lista     
-		remote_du = all_dus[parallel_du_index]
-		if remote_du == 'du_0':
-			parallel_du_index += 1
-			remote_du = all_dus[parallel_du_index]
-		parallel_du_index = (parallel_du_index+1) % len(all_dus)
-		invoked_du[0] = remote_du
-		print("Llamada a funcion recursiva, la du afortunada sera: ", remote_du)
+	# if remote_du == 'du_5000':
+	# 	#metemos las dus en una lista y hacemos un contador saturado sobre los indices de esa lista     
+	# 	remote_du = all_dus[parallel_du_index]
+	# 	if remote_du == 'du_0':
+	# 		parallel_du_index += 1
+	# 		remote_du = all_dus[parallel_du_index]
+	# 	parallel_du_index = (parallel_du_index+1) % len(all_dus)
+	# 	invoked_du[0] = remote_du
+	# 	print("Llamada a funcion recursiva, la du afortunada sera: ", remote_du)
 
 	if remote_du in du_list:
 		print ("local invocation: ",invoked_function)
@@ -204,35 +210,56 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 		except:
 			return res
 
-	# Get the possible agents to invoke
-	global my_agent_ID
-	list_agents = cloudbook_dict_agents.get(remote_du)
-	list_agents = list(list_agents) 
+	while True:
+		# Get the possible agents to invoke
+		global my_agent_ID
+		list_agents = list(cloudbook_dict_agents.get(remote_du)) # Agents containing the DU that has the function to invoke
 
-	# Get the machines to invoke
-	remote_agent = list_agents[0] # several agents can have this remote DU. In order to test, get the first
-	print ("remote agent", remote_agent)
+		# Get the machines to invoke
+		for remote_agent in list_agents:
+			#remote_agent = list_agents[i] # several agents can have this remote DU.
+			print ("remote agent", remote_agent)
 
-	try:
-		desired_host_ip_port = agents_grant[remote_agent]['IP'] + ":" + str(agents_grant[remote_agent]['PORT'])
-		print("Host ip and port: ", desired_host_ip_port)
-	except Exception as e:
-		print("ERROR: cannot find the ip and port for invoking the desired agent!")
-		raise e 	# Maybe set alarm???
+			try:
+				desired_host_ip_port = agents_grant[remote_agent]['IP'] + ":" + str(agents_grant[remote_agent]['PORT'])
+				print("Host ip and port: ", desired_host_ip_port)
+			except Exception as e:
+				print("ERROR: cannot find the ip and port for invoking the desired agent!")
+				raise e 	# Maybe set alarm???
 
-	# Choose du from de list of dus passed
-	chosen_du = remote_du
-	if invoker_function == None:
-		url = 'http://'+desired_host_ip_port+"/invoke?invoked_function="+chosen_du+"."+invoked_function
-	else:
-		url = 'http://'+desired_host_ip_port+"/invoke?invoked_function="+chosen_du+"."+invoked_function+"&invoker_function="+invoker_function
-	print (url)
+			try:
+				# Choose du from de list of dus passed
+				chosen_du = remote_du
+				if invoker_function == None:
+					url = 'http://'+desired_host_ip_port+"/invoke?invoked_function="+chosen_du+"."+invoked_function
+				else:
+					url = 'http://'+desired_host_ip_port+"/invoke?invoked_function="+chosen_du+"."+invoked_function+"&invoker_function="+invoker_function
+				print (url)
 
-	send_data = invoked_data.encode()
-	print("Sending data: ",send_data)
-	request_object = urllib.request.Request(url, send_data)
-	print ("Request launched: ", url)
-	r = urllib.request.urlopen(request_object)
+				send_data = invoked_data.encode()
+				print("Sending data: ",send_data)
+				request_object = urllib.request.Request(url, send_data)
+				print ("Request launched: ", url)
+				r = urllib.request.urlopen(request_object)
+				break
+			except:
+				print("URL was not answered by " + remote_agent + " (IP:port --> " + desired_host_ip_port + ")")
+				warning_file_path = agent_config_dict["DISTRIBUTED_FS"] + os.sep + "WARNING"
+				open(warning_file_path, 'a').close() 	# Create a warning file if it does not exist
+				print("WARNING file has been created.")
+				time.sleep(1)
+				print("RETRYING...")
+		else: # If the for loop has not been broken
+			print("No agent available to execute the function.")
+			critical_file_path = agent_config_dict["DISTRIBUTED_FS"] + os.sep + "CRITICAL"
+			open(critical_file_path, 'a').close() 	# Create a warning file if it does not exist
+			print("CRITICAL file has been created.")
+			time.sleep(1)
+			print("RETRYING...")
+			continue #Go to while again
+		# If the for loop has been broken (request went good)
+		break # Break also from while loop
+
 	print ("Response received")
 
 	try: 		# For functions that return some json
@@ -414,44 +441,14 @@ def create_grant(agent_grant_interval, init_grant, int_port=0, fs_path=''):
 		for i in cloudbook_dict_agents:
 			all_dus.append(i)
 
-	# Internal function to import the DUs in the agent
-	def import_DUs_into_agent():
-		global du_list
+	# # Internal function to import the DUs in the agent
+	# def import_DUs_into_agent():
+	# 	global du_list
 
-		# Load the DUs that belong to this agent.
-		du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
-		print("My du_list: ", du_list)
+	# 	# Load the DUs that belong to this agent.
+	# 	du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
+	# 	print("My du_list: ", du_list)
 
-		sys.path.append(fs_path)
-		'''for du in du_list:
-			exec ("from du_files import "+du)
-			exec(du+".invoker=outgoing_invoke")'''
-
-		du_files_path = fs_path + os.sep + "du_files"
-		UNIX_du_files_path = du_files_path.replace(os.sep, "/")
-		for du in du_list:
-			print(du)
-			du_i_file_path = du_files_path + os.sep + du+".py"
-			while not os.path.exists(du_i_file_path):
-				time.sleep(0.1)
-			##OJO CON ESTO QUE HAY QUE PROBARLO BIEN BIEN
-			exec('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
-			# exec("from du_files import "+du)
-			globals()[du] = __import__(du, fromlist=["du_files"])
-			globals()[du+'invoker'] = outgoing_invoke
-			#exec(du+".invoker=outgoing_invoke")# read file
-			print(du+" charged")
-			
-			# exec('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
-			# print('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
-			# exec("from du_files import "+du)
-			# print("from du_files import "+du)
-			# exec(du+".invoker=outgoing_invoke")# read file
-			# print(du+".invoker=outgoing_invoke")# read file
-			# print(du+" charged")
-
-	# Deletes the previously imported DUs from the agent (if there was any)
-	# def delete_imported_DUs_from_agent():
 	# 	sys.path.append(fs_path)
 	# 	'''for du in du_list:
 	# 		exec ("from du_files import "+du)
@@ -465,61 +462,91 @@ def create_grant(agent_grant_interval, init_grant, int_port=0, fs_path=''):
 	# 		while not os.path.exists(du_i_file_path):
 	# 			time.sleep(0.1)
 	# 		##OJO CON ESTO QUE HAY QUE PROBARLO BIEN BIEN
-			
 	# 		exec('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
-	# 		exec("from du_files import "+du)
-	# 		exec(du+".invoker=outgoing_invoke")# read file
+	# 		# exec("from du_files import "+du)
+	# 		globals()[du] = __import__(du, fromlist=["du_files"])
+	# 		globals()[du+'invoker'] = outgoing_invoke
+	# 		#exec(du+".invoker=outgoing_invoke")# read file
 	# 		print(du+" charged")
+			
+	# 		# exec('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
+	# 		# print('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
+	# 		# exec("from du_files import "+du)
+	# 		# print("from du_files import "+du)
+	# 		# exec(du+".invoker=outgoing_invoke")# read file
+	# 		# print(du+".invoker=outgoing_invoke")# read file
+	# 		# print(du+" charged")
 
-	# Do the necessary writes and reads
-	print('agent_X_grant_file_path = ', agent_X_grant_file_path)
-	print('agents_grant_file_path = ', agents_grant_file_path)
-	print('cloudbookjson_file_path = ', cloudbookjson_file_path)
-	write_agent_X_grant_file()
-	while not os.path.exists(agents_grant_file_path) or not os.path.exists(cloudbookjson_file_path) or os.stat(cloudbookjson_file_path).st_size==0:
-		print("Waiting for agents_grant.json and cloudbook.json (", my_agent_ID,")")
-		time.sleep(1)
-	read_agents_grant_file()
-	read_cloudbook_file()
-	import_DUs_into_agent()
+	# # Deletes the previously imported DUs from the agent (if there was any)
+	# # def delete_imported_DUs_from_agent():
+	# # 	sys.path.append(fs_path)
+	# # 	'''for du in du_list:
+	# # 		exec ("from du_files import "+du)
+	# # 		exec(du+".invoker=outgoing_invoke")'''
 
-	grant = None
-	while True:
-		current_time = time.monotonic()
+	# # 	du_files_path = fs_path + os.sep + "du_files"
+	# # 	UNIX_du_files_path = du_files_path.replace(os.sep, "/")
+	# # 	for du in du_list:
+	# # 		print(du)
+	# # 		du_i_file_path = du_files_path + os.sep + du+".py"
+	# # 		while not os.path.exists(du_i_file_path):
+	# # 			time.sleep(0.1)
+	# # 		##OJO CON ESTO QUE HAY QUE PROBARLO BIEN BIEN
+			
+	# # 		exec('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
+	# # 		exec("from du_files import "+du)
+	# # 		exec(du+".invoker=outgoing_invoke")# read file
+	# # 		print(du+" charged")
 
-		# While there is data in the queue, analyze it
-		while not grant_queue.empty():
-			item = grant_queue.get()
-			#print("Grant item retrieved from queue: ", item)
-			try:
-				item_grant = item['grant']
-				if item_grant=='HIGH' or item_grant=='MEDIUM' or item_grant=='LOW':
-					grant = item_grant
-				else:
-					print("ERROR: The grant obtained from the queue is not valid. Invalid value.")
-			except:
-				print("ERROR: There was a problem with the grant item obtained from the queue. Invalid key.")
+	# # Do the necessary writes and reads
+	# print('agent_X_grant_file_path = ', agent_X_grant_file_path)
+	# print('agents_grant_file_path = ', agents_grant_file_path)
+	# print('cloudbookjson_file_path = ', cloudbookjson_file_path)
+	# write_agent_X_grant_file()
+	# while not os.path.exists(agents_grant_file_path) or not os.path.exists(cloudbookjson_file_path) or os.stat(cloudbookjson_file_path).st_size==0:
+	# 	print("Waiting for agents_grant.json and cloudbook.json (", my_agent_ID,")")
+	# 	time.sleep(1)
+	# read_agents_grant_file()
+	# read_cloudbook_file()
+	# import_DUs_into_agent()
 
-		# When the the interval time expires
-		if current_time-time_start >= agent_grant_interval:
-			time_start += agent_grant_interval
+	# grant = None
+	# while True:
+	# 	current_time = time.monotonic()
 
-			# Update dictionary with new data (grant)
-			if grant!= None:
-				grant_dictionary[my_agent_ID]["GRANT"] = grant
-				#print('Grant dict updated')
+	# 	# While there is data in the queue, analyze it
+	# 	while not grant_queue.empty():
+	# 		item = grant_queue.get()
+	# 		#print("Grant item retrieved from queue: ", item)
+	# 		try:
+	# 			item_grant = item['grant']
+	# 			if item_grant=='HIGH' or item_grant=='MEDIUM' or item_grant=='LOW':
+	# 				grant = item_grant
+	# 			else:
+	# 				print("ERROR: The grant obtained from the queue is not valid. Invalid value.")
+	# 		except:
+	# 			print("ERROR: There was a problem with the grant item obtained from the queue. Invalid key.")
 
-			# Update also IP/port ??? --> call get_ip_info() again and update if necessary
-			#grant_dictionary[my_agent_ID]["IP"] = ip
-			#grant_dictionary[my_agent_ID]["PORT"] = port
+	# 	# When the the interval time expires
+	# 	if current_time-time_start >= agent_grant_interval:
+	# 		time_start += agent_grant_interval
 
-			# Write dictionary in "agent_X_grant.json" and read dictionary from "agents_grant.json"
-			write_agent_X_grant_file()
-			read_agents_grant_file()
-			grant = None
+	# 		# Update dictionary with new data (grant)
+	# 		if grant!= None:
+	# 			grant_dictionary[my_agent_ID]["GRANT"] = grant
+	# 			#print('Grant dict updated')
 
-		# Wait 1 second to look for more data in the queue
-		time.sleep(1)
+	# 		# Update also IP/port ??? --> call get_ip_info() again and update if necessary
+	# 		#grant_dictionary[my_agent_ID]["IP"] = ip
+	# 		#grant_dictionary[my_agent_ID]["PORT"] = port
+
+	# 		# Write dictionary in "agent_X_grant.json" and read dictionary from "agents_grant.json"
+	# 		write_agent_X_grant_file()
+	# 		read_agents_grant_file()
+	# 		grant = None
+
+	# 	# Wait 1 second to look for more data in the queue
+	# 	time.sleep(1)
 
 
 # This function checks if the port passed as parameter is available or in use, trying to bind that port to a socket. Then, the socket is
@@ -617,6 +644,8 @@ if __name__ == "__main__":
 	agent_X_grant_file_path = project_path + os.sep + "distributed" + os.sep + "agents_grant" + os.sep + my_agent_ID+"_grant.json"
 	agents_grant_file_path = project_path + os.sep + "distributed" + os.sep + "agents_grant.json"
 	cloudbookjson_file_path = fs_path + os.sep + "cloudbook.json"
+	hot_redeploy_file_path = fs_path + os.sep + "HOT_REDEPLOY"
+	cold_redeploy_file_path = fs_path + os.sep + "COLD_REDEPLOY"
 
 	# Internal function to write the "agent_X_grant.json" file consumed by the deployer
 	def write_agent_X_grant_file():
@@ -633,8 +662,10 @@ if __name__ == "__main__":
 	def read_cloudbook_file():
 		global cloudbook_dict_agents
 		global all_dus
+		global du_list
 		cloudbook_dict_agents = loader.load_dictionary(cloudbookjson_file_path)
 		#print("cloudbook.json has been read.\n cloudbook_dict_agents = ", cloudbook_dict_agents)
+		du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
 
 		# Get all dus
 		all_dus = []
@@ -698,20 +729,42 @@ if __name__ == "__main__":
 	# 		exec(du+".invoker=outgoing_invoke")# read file
 	# 		print(du+" charged")
 
+	# Internal funciton to check if there are any redeployment files
+	def find_redeploy_files():
+		hot_redeploy = False
+		cold_redeploy = False
+		if os.path.exists(hot_redeploy_file_path):
+			print(my_agent_ID, ": HOT_REDEPLOY file found.")
+			hot_redeploy = True
+		if os.path.exists(cold_redeploy_file_path):
+			print(my_agent_ID, ": COLD_REDEPLOY file found.")
+			cold_redeploy = True
+		return (hot_redeploy, cold_redeploy)
+
 	# Do the necessary writes and reads
 	print('agent_X_grant_file_path = ', agent_X_grant_file_path)
 	print('agents_grant_file_path = ', agents_grant_file_path)
 	print('cloudbookjson_file_path = ', cloudbookjson_file_path)
-	write_agent_X_grant_file()
-	while not os.path.exists(agents_grant_file_path) or not os.path.exists(cloudbookjson_file_path) or os.stat(cloudbookjson_file_path).st_size==0:
-		print("Waiting for agents_grant.json and cloudbook.json (", my_agent_ID,")")
-		time.sleep(1)
-	read_agents_grant_file()
-	read_cloudbook_file()
-	#import_DUs_into_agent()
+	
 
 	# Load the DUs that belong to this agent.
-	du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
+	while not du_list:
+		try:
+			write_agent_X_grant_file()
+			while not os.path.exists(agents_grant_file_path) or not os.path.exists(cloudbookjson_file_path) or os.stat(cloudbookjson_file_path).st_size==0:
+				print("Waiting for agents_grant.json and cloudbook.json (", my_agent_ID,")")
+				if not os.path.exists(agent_X_grant_file_path):
+					print(my_agent_ID + ": my grant file was deleted!")
+					write_agent_X_grant_file()
+				time.sleep(1)
+			read_agents_grant_file()
+			read_cloudbook_file()
+			time.sleep(10)
+		except:
+			print("Fallo de lectura")
+			time.sleep(10)
+
+	dus_loaded = True
 	print("My du_list: ", du_list)
 
 	sys.path.append(fs_path)
@@ -766,7 +819,12 @@ if __name__ == "__main__":
 
 			# Write dictionary in "agent_X_grant.json" and read dictionary from "agents_grant.json"
 			write_agent_X_grant_file()
-			read_agents_grant_file()
+			(hot_redeploy, cold_redeploy) = find_redeploy_files()
+			if hot_redeploy:
+				read_agents_grant_file()
+				read_cloudbook_file()
+			if cold_redeploy:
+				pass #Not implemented yet
 			grant = None
 
 		# Wait 1 second to look for more data in the queue

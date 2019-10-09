@@ -43,8 +43,9 @@ configjson_dict = {}
 
 # All dus that contain the program
 all_dus = []
-# Index in order to make the round robin assignation of all_dus
-parallel_du_index = 0
+
+# Index in order to make the round robin assignation of invocation requests
+round_robin_index = 0
 
 # FIFO queue that passes stats to the stats file creator thread
 stats_queue = queue.Queue(maxsize=0)
@@ -104,11 +105,11 @@ def invoke(configuration = None):
 	global stats_dict
 
 	while not dus_loaded:
-		print(my_agent_ID, ": Invoked but waiting for dus to be loaded.==========================================================================================================================================")
-		sleep(1)
+		print(my_agent_ID, ": Invoked but waiting for dus to be loaded.")
+		time.sleep(1)
 
 	print("=====AGENT: /INVOKE=====")
-	print(threading.get_ident())
+	print("Thread ID: ", threading.get_ident())
 	invoked_data = ""
 	print("REQUEST.form: ", request.form)
 	invoked_function = request.args.get('invoked_function')
@@ -144,7 +145,7 @@ def invoke(configuration = None):
 	return resul
 
 def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function = None, configuration = None):
-	global parallel_du_index
+	global round_robin_index
 	'''
 	This function is the one that calls the functions that do not belong to the agent's dus
 	This is because the exec(du+".invoker=remote_invoke") statement in the main process of every agent
@@ -157,7 +158,7 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 		Build the call
 			Gets the host (TODO: Cache the ip)
 			Build the url (in order the invoke function from the other agent understands it: 
-				url='http://'+host+"/invoke?invoked_function="+chosen_du+"."+invoked_function)
+				url='http://'+host+"/invoke?invoked_function="+remote_du+"."+invoked_function)
 			Encode data (in the post of the https call)
 		Launch the request
 		Receive response
@@ -166,32 +167,12 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 		The function returns the data received as response (That data is the resul of the invoke function in the other agent)
 	'''
 	print("=====AGENT: /REMOTE_INVOKE=====")
-	print(threading.get_ident())
+	print("Thread ID: ", threading.get_ident())
 
-	remote_du = invoked_du[0] #TODO: Random between remote dus, if invoked fun is idempotent, it can result into multiple invocations
-	print ("remote du = ", remote_du)
-	###Round Robin: Circular planification
-	if remote_du == 'du_default':
-		#metemos las dus en una lista y hacemos un contador saturado sobre los indices de esa lista     
-		remote_du = all_dus[parallel_du_index]
-		if remote_du == 'du_0':
-			parallel_du_index += 1
-			remote_du = all_dus[parallel_du_index]
-		parallel_du_index = (parallel_du_index+1) % len(all_dus)
-		invoked_du[0] = remote_du
-	# 	print("Llamada a funcion parallel, la du afortunada sera: ", remote_du)
+	# Invoked_du is a list of the DUs that implement the function, but due to latest implementations, it only contains one item
+	remote_du = invoked_du[0]
 
-	# if remote_du == 'du_5000':
-	# 	#metemos las dus en una lista y hacemos un contador saturado sobre los indices de esa lista     
-	# 	remote_du = all_dus[parallel_du_index]
-	# 	if remote_du == 'du_0':
-	# 		parallel_du_index += 1
-	# 		remote_du = all_dus[parallel_du_index]
-	# 	parallel_du_index = (parallel_du_index+1) % len(all_dus)
-	# 	invoked_du[0] = remote_du
-	# 	print("Llamada a funcion recursiva, la du afortunada sera: ", remote_du)
-
-	if remote_du in du_list:
+	if remote_du in du_list and remote_du != 'du_default':
 		print ("local invocation: ",invoked_function)
 		print(invoked_du, invoked_function, invoked_data)
 		#res=eval(invoked_function)
@@ -210,56 +191,60 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 		except:
 			return res
 
-	while True:
-		# Get the possible agents to invoke
-		global my_agent_ID
-		list_agents = list(cloudbook_dict_agents.get(remote_du)) # Agents containing the DU that has the function to invoke
+	# Get the possible agents to invoke
+	global my_agent_ID
+	list_agents = list(cloudbook_dict_agents.get(remote_du)) # Agents containing the DU that has the function to invoke
 
-		# Get the machines to invoke
-		for remote_agent in list_agents:
-			#remote_agent = list_agents[i] # several agents can have this remote DU.
-			print ("remote agent", remote_agent)
+	# Get the machines to invoke
+	iteration_agents_list = list_agents[round_robin_index:len(list_agents)] + list_agents[0:round_robin_index]
+	last_agent = iteration_agents_list[-1] 	# -1 indicates the last element of the list
+	all_agents_tried = False
+	while not all_agents_tried:
+		remote_agent = iteration_agents_list[0]
+		print ("The selected remote agent to invoke is: ", remote_agent, " from list ", list_agents, " rewritten as ", iteration_agents_list)
 
-			try:
-				desired_host_ip_port = agents_grant[remote_agent]['IP'] + ":" + str(agents_grant[remote_agent]['PORT'])
-				print("Host ip and port: ", desired_host_ip_port)
-			except Exception as e:
-				print("ERROR: cannot find the ip and port for invoking the desired agent!")
-				raise e 	# Maybe set alarm???
+		# Update round robin index
+		round_robin_index = (round_robin_index+1) % len(list_agents)
+		try:
+			desired_host_ip_port = agents_grant[remote_agent]['IP'] + ":" + str(agents_grant[remote_agent]['PORT'])
+			print("Host ip and port: ", desired_host_ip_port)
+		except Exception as e:
+			print("ERROR: cannot find the ip and port for invoking the desired agent!")
+			raise e 	# Maybe set alarm???
 
-			try:
-				# Choose du from de list of dus passed
-				chosen_du = remote_du
-				if invoker_function == None:
-					url = 'http://'+desired_host_ip_port+"/invoke?invoked_function="+chosen_du+"."+invoked_function
-				else:
-					url = 'http://'+desired_host_ip_port+"/invoke?invoked_function="+chosen_du+"."+invoked_function+"&invoker_function="+invoker_function
-				print (url)
+		try:
+			if invoker_function == None:
+				url = 'http://'+desired_host_ip_port+"/invoke?invoked_function="+remote_du+"."+invoked_function
+			else:
+				url = 'http://'+desired_host_ip_port+"/invoke?invoked_function="+remote_du+"."+invoked_function+"&invoker_function="+invoker_function
+			print (url)
 
-				send_data = invoked_data.encode()
-				print("Sending data: ",send_data)
-				request_object = urllib.request.Request(url, send_data)
-				print ("Request launched: ", url)
-				r = urllib.request.urlopen(request_object)
-				break
-			except:
-				print("URL was not answered by " + remote_agent + " (IP:port --> " + desired_host_ip_port + ")")
-				warning_file_path = agent_config_dict["DISTRIBUTED_FS"] + os.sep + "WARNING"
-				open(warning_file_path, 'a').close() 	# Create a warning file if it does not exist
-				print("WARNING file has been created.")
-				time.sleep(1)
+			send_data = invoked_data.encode()
+			print("Sending data: ",send_data)
+			request_object = urllib.request.Request(url, send_data)
+			print ("Request launched: ", url)
+			r = urllib.request.urlopen(request_object)
+			break
+		except:
+			print("URL was not answered by " + remote_agent + " (IP:port --> " + desired_host_ip_port + ")")
+			warning_file_path = agent_config_dict["DISTRIBUTED_FS"] + os.sep + "WARNING"
+			open(warning_file_path, 'a').close() 	# Create a warning file if it does not exist
+			print("WARNING file has been created.")
+			if remote_agent == last_agent:
+				all_agents_tried = True
+			else:
 				print("RETRYING...")
-		else: # If the for loop has not been broken
-			print("No agent available to execute the function.")
-			critical_file_path = agent_config_dict["DISTRIBUTED_FS"] + os.sep + "CRITICAL"
-			open(critical_file_path, 'a').close() 	# Create a warning file if it does not exist
-			print("CRITICAL file has been created.")
+	else: 	# If the while finishes changing the all_agents_tried variable, then there were no reachable agents
+		# HANDLE THIS SITUATION. THERE IS NO ANSWER SO DU WILL RAISE AN EXCEPTION PROBABLY
+		print("No agent available to execute the function.")
+		critical_file_path = agent_config_dict["DISTRIBUTED_FS"] + os.sep + "CRITICAL"
+		open(critical_file_path, 'a').close() 	# Create a warning file if it does not exist
+		print("CRITICAL file has been created.")
+		while True:
 			time.sleep(1)
-			print("RETRYING...")
-			continue #Go to while again
-		# If the for loop has been broken (request went good)
-		break # Break also from while loop
+			print(my_agent_ID, ": this agent must be restarted. It is currently not possible to recover from this situation.")
 
+	# If the while finishes with break, then a response has been received and this invocation and function finishes normally.
 	print ("Response received")
 
 	try: 		# For functions that return some json
@@ -741,11 +726,14 @@ if __name__ == "__main__":
 			cold_redeploy = True
 		return (hot_redeploy, cold_redeploy)
 
-	# Do the necessary writes and reads
-	print('agent_X_grant_file_path = ', agent_X_grant_file_path)
-	print('agents_grant_file_path = ', agents_grant_file_path)
-	print('cloudbookjson_file_path = ', cloudbookjson_file_path)
-	
+	# # Internal funciton to check if there are any redeployment files
+	# def find_redeploy_files():
+	# 	hot_redeploy = False
+	# 	cold_redeploy = False
+	# 	if os.path.exists(hot_redeploy_file_path):
+	# 		print(my_agent_ID, ": HOT_REDEPLOY file found.")
+	# 		hot_redeploy = True
+
 
 	# Load the DUs that belong to this agent.
 	while not du_list:
@@ -759,10 +747,10 @@ if __name__ == "__main__":
 				time.sleep(1)
 			read_agents_grant_file()
 			read_cloudbook_file()
-			time.sleep(10)
+			time.sleep(1)
 		except:
-			print("Fallo de lectura")
-			time.sleep(10)
+			print("ERROR: Read error")
+			time.sleep(1)
 
 	dus_loaded = True
 	print("My du_list: ", du_list)
@@ -780,7 +768,7 @@ if __name__ == "__main__":
 		while not os.path.exists(du_i_file_path):
 			time.sleep(0.1)
 		##OJO CON ESTO QUE HAY QUE PROBARLO BIEN BIEN
-		exec('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
+		#exec('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
 		exec("from du_files import "+du)
 		# globals()[du] = __import__(du, fromlist=["du_files"])
 		# globals()[du+'invoker'] = outgoing_invoke
@@ -824,7 +812,21 @@ if __name__ == "__main__":
 				read_agents_grant_file()
 				read_cloudbook_file()
 			if cold_redeploy:
-				pass #Not implemented yet
+				# Cleaning of loaded DUs
+				for du in du_list:
+					print(my_agent_ID + ": deleting " + du)
+					exec("del " + du)
+
+				read_agents_grant_file()
+				read_cloudbook_file()
+				for du in du_list:
+					print(du)
+					du_i_file_path = du_files_path + os.sep + du+".py"
+					while not os.path.exists(du_i_file_path):
+						time.sleep(0.1)
+					exec("from du_files import "+du)
+					exec(du+".invoker=outgoing_invoke")# read file
+					print(du+" charged")
 			grant = None
 
 		# Wait 1 second to look for more data in the queue

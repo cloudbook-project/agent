@@ -75,6 +75,17 @@ agents_grant = {}
 # Global boolean variable for the state of the dus that the agent has to load (True if they have been loaded, False otherwise)
 dus_loaded = False
 
+# Number of times the cloudbook has changed and DUs have been (re)loaded
+cloudbook_version = 0
+
+
+
+#####   CONSTANTS   #####
+CRIT_ERR_NO_ANSWER = "CLOUDBOOK CRITICAL ERROR: no agent could answer the remote invokation to a function in a critical DU. \
+The DU state is lost and program is corrupt. Critical alarm created in the distributed filesystem in order that depployer's \
+surveillance monitor knows that an invokation has failed. BaseException raised in order to try to stop the program."
+
+
 
 #####   APPLICATION TO SEND AND RECEIVE FUNCTION REQUESTS   #####
 
@@ -166,6 +177,16 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 				JSON object or other type like a string
 		The function returns the data received as response (That data is the resul of the invoke function in the other agent)
 	'''
+
+	# Internal function to write alarms (files). Parameter is the importance level (the alarm file name)
+	def write_alarm(alarm_name):
+		possible_alarms = ["CRITICAL", "WARNING"]
+		assert alarm_name in possible_alarms
+		alarm_file_path = agent_config_dict["DISTRIBUTED_FS"] + os.sep + alarm_name
+		open(alarm_file_path, 'a').close() 	# Create an alarm file if it does not exist
+		print(alarm_name, " alarm file has been created.")
+
+
 	print("=====AGENT: /REMOTE_INVOKE=====")
 	print("Thread ID: ", threading.get_ident())
 
@@ -195,13 +216,17 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 	global my_agent_ID
 	list_agents = list(cloudbook_dict_agents.get(remote_du)) # Agents containing the DU that has the function to invoke
 
-	# Get the machines to invoke
-	iteration_agents_list = list_agents[round_robin_index:len(list_agents)] + list_agents[0:round_robin_index]
-	last_agent = iteration_agents_list[-1] 	# -1 indicates the last element of the list
-	all_agents_tried = False
-	while not all_agents_tried:
-		remote_agent = iteration_agents_list[0]
-		print ("The selected remote agent to invoke is: ", remote_agent, " from list ", list_agents, " rewritten as ", iteration_agents_list)
+	# Get the version of the cloudbook in order to check for changes
+	invocation_cloudbook_version = cloudbook_version
+
+	# Get the agents to invoke
+	invocation_agents_list = list_agents[round_robin_index:len(list_agents)] + list_agents[0:round_robin_index]
+	last_agent = invocation_agents_list[-1] 	# -1 indicates the last element of the list
+
+	i = 0
+	while i < len(list_agents):
+		remote_agent = invocation_agents_list[i]
+		print ("The selected remote agent to invoke is: ", remote_agent, " from list ", list_agents, " rewritten as ", invocation_agents_list)
 
 		# Update round robin index
 		round_robin_index = (round_robin_index+1) % len(list_agents)
@@ -227,24 +252,39 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 			break
 		except:
 			print("URL was not answered by " + remote_agent + " (IP:port --> " + desired_host_ip_port + ")")
-			warning_file_path = agent_config_dict["DISTRIBUTED_FS"] + os.sep + "WARNING"
-			open(warning_file_path, 'a').close() 	# Create a warning file if it does not exist
-			print("WARNING file has been created.")
-			if remote_agent == last_agent:
-				all_agents_tried = True
-			else:
-				print("RETRYING...")
-	else: 	# If the while finishes changing the all_agents_tried variable, then there were no reachable agents
-		# HANDLE THIS SITUATION. THERE IS NO ANSWER SO DU WILL RAISE AN EXCEPTION PROBABLY
-		print("No agent available to execute the function.")
-		critical_file_path = agent_config_dict["DISTRIBUTED_FS"] + os.sep + "CRITICAL"
-		open(critical_file_path, 'a').close() 	# Create a warning file if it does not exist
-		print("CRITICAL file has been created.")
-		while True:
-			time.sleep(1)
-			print(my_agent_ID, ": this agent must be restarted. It is currently not possible to recover from this situation.")
+			write_alarm("WARNING")
 
-	# If the while finishes with break, then a response has been received and this invocation and function finishes normally.
+			if remote_agent == last_agent: 	# If all agents have been tested
+				print("No agents available to execute the requested function.")
+				if remote_du in critical_dus: 	# If the du is critical
+					print("The function that could not be invoked is in a critical du: ", remote_du + "." + invoked_function)
+					write_alarm("CRITICAL")
+					# while True:
+					# 	time.sleep(1)
+					# 	print(my_agent_ID, ": this agent must be restarted. It is currently not possible to recover from this situation.")
+					raise BaseException(CRIT_ERR_NO_ANSWER)
+				else: 	# If the du is NOT critical
+					print("The function that could not be invoked is in a NON-critical du: ", remote_du + "." + invoked_function)
+					
+					# Wait until new cloudbook version is charged
+					while invocation_cloudbook_version == cloudbook_version:
+						print("Waiting for redeployment to reallocate " + remote_du + " in an accessible agent.")
+						time.sleep(1)
+					
+					# Refresh the variables after the hot redeployment in order to try again
+					list_agents = list(cloudbook_dict_agents.get(remote_du))
+					invocation_cloudbook_version = cloudbook_version
+					invocation_agents_list = list_agents[round_robin_index:len(list_agents)] + list_agents[0:round_robin_index]
+					last_agent = invocation_agents_list[-1]
+					i = 0
+					print("Retrying with new cloudbook...")
+
+			else: 	# If there are still agents to try
+				print("Retrying...")
+		# end_of_except
+	# end_of_while
+		
+	# If the loop finishes with break, then a response has been received and this invocation and function finishes normally.
 	print ("Response received")
 
 	try: 		# For functions that return some json
@@ -752,7 +792,6 @@ if __name__ == "__main__":
 			print("ERROR: Read error")
 			time.sleep(1)
 
-	dus_loaded = True
 	print("My du_list: ", du_list)
 
 	sys.path.append(fs_path)
@@ -774,6 +813,9 @@ if __name__ == "__main__":
 		# globals()[du+'invoker'] = outgoing_invoke
 		exec(du+".invoker=outgoing_invoke")# read file
 		print(du+" charged")
+	
+	dus_loaded = True
+	cloudbook_version += 1
 
 	grant = None
 	while True:
@@ -811,7 +853,9 @@ if __name__ == "__main__":
 			if hot_redeploy:
 				read_agents_grant_file()
 				read_cloudbook_file()
+				# ! - IMPROVEMENT: Check if the agent only has loaded the du_default and load more in hot redeploy???
 			if cold_redeploy:
+				dus_loaded = False
 				# Cleaning of loaded DUs
 				for du in du_list:
 					print(my_agent_ID + ": deleting " + du)
@@ -819,6 +863,7 @@ if __name__ == "__main__":
 
 				read_agents_grant_file()
 				read_cloudbook_file()
+					
 				for du in du_list:
 					print(du)
 					du_i_file_path = du_files_path + os.sep + du+".py"
@@ -827,6 +872,10 @@ if __name__ == "__main__":
 					exec("from du_files import "+du)
 					exec(du+".invoker=outgoing_invoke")# read file
 					print(du+" charged")
+				dus_loaded = True
+				cloudbook_version += 1
+				print("My du_list: ", du_list)
+
 			grant = None
 
 		# Wait 1 second to look for more data in the queue

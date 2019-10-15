@@ -231,8 +231,9 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 		print ("The selected remote agent to invoke is: ", remote_agent, " from list ", list_agents, " rewritten as ", invocation_agents_list)
 
 		# Update round robin index
-		round_robin_index = (round_robin_index+1) % len(list_agents)
-		print("round_robin_index = ", round_robin_index)
+		if len(list_agents) > 1:
+			round_robin_index = (round_robin_index+1) % len(list_agents)
+			print("round_robin_index = ", round_robin_index)
 		try:
 			desired_host_ip_port = invocation_agents_grant[remote_agent]['IP'] + ":" + str(invocation_agents_grant[remote_agent]['PORT'])
 			print("Host ip and port: ", desired_host_ip_port)

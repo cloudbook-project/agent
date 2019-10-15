@@ -219,6 +219,8 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 	# Get the version of the cloudbook in order to check for changes
 	invocation_cloudbook_version = cloudbook_version
 
+	invocation_agents_grant = agents_grant
+
 	# Get the agents to invoke
 	invocation_agents_list = list_agents[round_robin_index:len(list_agents)] + list_agents[0:round_robin_index]
 	last_agent = invocation_agents_list[-1] 	# -1 indicates the last element of the list
@@ -230,8 +232,9 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 
 		# Update round robin index
 		round_robin_index = (round_robin_index+1) % len(list_agents)
+		print("round_robin_index = ", round_robin_index)
 		try:
-			desired_host_ip_port = agents_grant[remote_agent]['IP'] + ":" + str(agents_grant[remote_agent]['PORT'])
+			desired_host_ip_port = invocation_agents_grant[remote_agent]['IP'] + ":" + str(invocation_agents_grant[remote_agent]['PORT'])
 			print("Host ip and port: ", desired_host_ip_port)
 		except Exception as e:
 			print("ERROR: cannot find the ip and port for invoking the desired agent!")
@@ -274,6 +277,7 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 					# Refresh the variables after the hot redeployment in order to try again
 					list_agents = list(cloudbook_dict_agents.get(remote_du))
 					invocation_cloudbook_version = cloudbook_version
+					invocation_agents_grant = agents_grant
 					invocation_agents_list = list_agents[round_robin_index:len(list_agents)] + list_agents[0:round_robin_index]
 					last_agent = invocation_agents_list[-1]
 					i = 0
@@ -281,6 +285,7 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 
 			else: 	# If there are still agents to try
 				print("Retrying...")
+				i += 1
 		# end_of_except
 	# end_of_while
 		
@@ -366,6 +371,10 @@ def flaskThreaded(port):
 	print("Launched in port:", port)
 	application.run(debug=False, host="0.0.0.0",port=port,threaded=True)
 	print("00000000000000000000000000000000000000000000000000000000000000000000000000")
+
+# This function raises an error
+def raise_error():
+	raise BaseException("Exception solicitada por main del agente")
 
 
 # Target function of the stats file creator thread. Implements the consumer of the producer/consumer model using stats_queue.
@@ -684,18 +693,19 @@ if __name__ == "__main__":
 		#print("agents_grant.json has been read.\n agents_grant = ", agents_grant)
 
 	# Internal function to load the "cloudbook.json" file created by the deployer
-	def read_cloudbook_file():
+	def read_cloudbook_file(dict_only=False):
 		global cloudbook_dict_agents
 		global all_dus
 		global du_list
 		cloudbook_dict_agents = loader.load_dictionary(cloudbookjson_file_path)
 		#print("cloudbook.json has been read.\n cloudbook_dict_agents = ", cloudbook_dict_agents)
-		du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
+		if not dict_only:
+			du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
 
-		# Get all dus
-		all_dus = []
-		for i in cloudbook_dict_agents:
-			all_dus.append(i)
+			# Get all dus
+			all_dus = []
+			for i in cloudbook_dict_agents:
+				all_dus.append(i)
 
 	# # Internal function to import the DUs in the agent
 	# def import_DUs_into_agent():
@@ -852,7 +862,8 @@ if __name__ == "__main__":
 			(hot_redeploy, cold_redeploy) = find_redeploy_files()
 			if hot_redeploy:
 				read_agents_grant_file()
-				read_cloudbook_file()
+				read_cloudbook_file(dict_only=True)
+				cloudbook_version += 1
 				# ! - IMPROVEMENT: Check if the agent only has loaded the du_default and load more in hot redeploy???
 			if cold_redeploy:
 				dus_loaded = False

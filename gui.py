@@ -368,54 +368,28 @@ class Application(ttk.Frame):
 		master.title("CloudBook Agent GUI")
 
 		self.notebook = ttk.Notebook(self)
-
-		#self.tabProject1 = ProjectTab(self.notebook)
-		#self.notebook.add(self.tabProject1, text="Tab del project 1", padding=10)
-
-		for project in projects:
-			self.notebook.add(ProjectTab(self.notebook, project_name=project), text=project, padding=10)
-		
-		# self.tab1 = GeneralInfoTab(self.notebook)
-		# self.notebook.add(self.tab1, text="General Info", padding=10)
-		
-		# self.tab2 = AddAgentTab(self.notebook)
-		# self.notebook.add(self.tab2, text="Add Agents", padding=10)
-		
-		# for info in agents_info:
-		#     globals()['self.'+str(info)] = AgentXTab(self.notebook, agent=agents_info[info])
-		#     self.notebook.add(globals()['self.'+str(info)], text="Agent "+str(info), padding=10)
-
-		#Refresh button created
 		tk.Button(self, text="Refresh", command=self.refresh).pack()
-		self.notebook.pack(expand=True, fill="both")
-		self.pack(expand=True, fill="both")
+
+		self.refresh()
 	
 	#Functionality for refresh button. Basically it rebuilds the framework.
 	def refresh(self):
 		get_info()
-		# self.tab1.destroy()
-		# self.tab2.destroy()
+
+		focused_tab = None
+		try:
+			focused_tab = self.notebook.tab(self.notebook.select(), "text")
+		except Exception as e:
+			pass
 		self.notebook.destroy()
 		self.notebook = ttk.Notebook(self)
 
-		# self.tabProject1 = ProjectTab(self.notebook)
-		# self.notebook.add(self.tabProject1, text="Tab del project 1", padding=10)
 		for project in projects:
-			self.notebook.add(ProjectTab(self.notebook, project_name=project), text=project, padding=10)
-
-
-		# self.tab1 = GeneralInfoTab(self.notebook)
-		# self.notebook.add(
-		#     self.tab1, text="General Info", padding=10)
+			globals()['self.'+project] = ProjectTab(self.notebook, project_name=project)
+			self.notebook.add(globals()['self.'+project], text=project, padding=10)
 		
-		# self.tab2 = AddAgentTab(self.notebook)
-		# self.notebook.add(
-		#     self.tab2, text="Add Agents", padding=10)
-		
-		# for info in agents_info:
-		#     globals()['self.'+str(info)] = AgentXTab(self.notebook, agent=agents_info[info])
-		#     self.notebook.add(
-		#         globals()['self.'+str(info)], text="Agent "+str(info), padding=10)
+		if focused_tab is not None:
+			self.notebook.select(globals()["self." + focused_tab])
 
 		self.notebook.pack(expand=True, fill="both")
 		self.pack(expand=True, fill="both")
@@ -425,7 +399,7 @@ class Application(ttk.Frame):
 #####   GUI MAIN   #####
 
 # Start application
-get_info()
+#get_info()
 master = tk.Tk()
 app = Application(master)
 master.protocol("WM_DELETE_WINDOW", on_closing)

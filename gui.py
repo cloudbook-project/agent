@@ -39,10 +39,27 @@ def get_info():
 
 	# List with the folders inside "cloudbook/" folder. Each one represents a different project
 	projects_list = next(os.walk(cloudbook_path))[1]
+	print("projects_list:", projects_list)
+
+	# Clean the possible processes running in projects deleted
+	deletable_projects = []
+	for proj in projects:
+		if proj not in projects_list:
+			print("WARNING: project " + proj + " has been deleted. All running agents on that project (if any) will be stopped.")
+			for active_agent in projects[proj]["agent_pid_dict"].keys():
+				active_proc = projects[proj]["agent_pid_dict"][active_agent]
+				print("Killing process:", active_proc)
+				kill_process(active_proc)
+			deletable_projects.append(proj)
+
+	for deletable_project in deletable_projects:
+		del projects[deletable_project]
 
 	# For each project, add its agents info in the global variable within the key with the same name of the project folder
 	for proj in projects_list:
-		projects[proj] = {}
+		if proj not in projects:
+			projects[proj] = {}
+			projects[proj]['agent_pid_dict'] = {}
 		projects[proj]['agents_info'] = {}
 
 		# The path to the config folder inside the project
@@ -59,13 +76,27 @@ def get_info():
 
 	print("PROJECTS:\n", projects)
 
-	return
-
 
 def on_closing():
-	if tk.messagebox.askokcancel("Quit", "Are you sure to exit the program?\nPlease, make sure no agents are running."):
+	if tk.messagebox.askokcancel("Quit", "Are you sure to close the program?\nAny running agent will be stopped."):
+		# Clean the possible processes running before exiting the program
+		print("\n\nAll running agents on any project (if any) will be stopped...")
+		for proj in projects:
+			for active_agent in projects[proj]["agent_pid_dict"].keys():
+				active_proc = projects[proj]["agent_pid_dict"][active_agent]
+				print("Killing process:", active_proc)
+				kill_process(active_proc)
+		print("\nExiting program...\n")
 		os._exit(0)
+	print("Program not exited. Everything is kept the same.\n")
 
+
+def kill_process(proc):
+	if(platform.system()=="Windows"):
+		proc.send_signal(signal.CTRL_BREAK_EVENT)
+		proc.kill()
+	else:
+		os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
 
 
 #####   GUI CLASSES   #####
@@ -73,20 +104,18 @@ def on_closing():
 # This tab class includes all the information related to the different agents that live in the machine (in a project).
 class GeneralInfoTab (ttk.Frame):
 
-	agent_pid_dict = {}
 	agents_info = {}
 	project_name = ""
 
 	# Builds the layout and fills it.
 	def __init__(self, *args, agents_info, project_name):
 		super().__init__(*args)
+		global projects
 
 		self.agents_info = agents_info
 		self.project_name = project_name
-		if not project_name in self.agent_pid_dict:
-			self.agent_pid_dict[self.project_name] = {}
 
-		print("Active processes: ", self.agent_pid_dict[self.project_name], "\n")
+		print("Active processes: ", projects[project_name]["agent_pid_dict"], "\n")
 
 		self.label_welcome = ttk.Label(self)
 		self.label_welcome["text"] = ("Welcome to CloudBook user interface. Your agents are:")
@@ -105,27 +134,27 @@ class GeneralInfoTab (ttk.Frame):
 					if(j==w-3):
 						self.launch_button = ttk.Button(self, text="Launch", command=lambda r=i+2, c=j: self.launch(r, c))
 						self.launch_button.grid(column=j, row=i+2)
-						if self.agents_info[i-1]['AGENT_ID'] in self.agent_pid_dict[self.project_name]:
+						if self.agents_info[i-1]['AGENT_ID'] in projects[project_name]["agent_pid_dict"]:
 							self.launch_button.config(state="disabled")
 						else:
 							self.launch_button.config(state="normal")
 					elif(j==w-2):
 						self.stop_button = ttk.Button(self, text="Stop", command=lambda r=i+2, c=j: self.stop(r, c))
 						self.stop_button.grid(column=j, row=i+2)
-						if self.agents_info[i-1]['AGENT_ID'] in self.agent_pid_dict[self.project_name]:
+						if self.agents_info[i-1]['AGENT_ID'] in projects[project_name]["agent_pid_dict"]:
 							self.stop_button.config(state="normal")
 						else:
 							self.stop_button.config(state="disabled")
 					elif(j==w-1):
 						self.remove_button = ttk.Button(self, text="Remove", command=lambda r=i+2, c=j: self.remove(r, c))
 						self.remove_button.grid(column=j, row=i+2)
-						if self.agents_info[i-1]['AGENT_ID'] in self.agent_pid_dict[self.project_name]:
+						if self.agents_info[i-1]['AGENT_ID'] in projects[project_name]["agent_pid_dict"]:
 							self.remove_button.config(state="disabled")
 						else:
 							self.remove_button.config(state="normal")
 					elif(j==w-4):
 						self.cell=ttk.Label(self)
-						if self.agents_info[i-1]['AGENT_ID'] in self.agent_pid_dict[self.project_name]:
+						if self.agents_info[i-1]['AGENT_ID'] in projects[project_name]["agent_pid_dict"]:
 							self.cell["foreground"] = "green"
 							self.cell["text"] = "RUNNING"
 						else:
@@ -142,36 +171,36 @@ class GeneralInfoTab (ttk.Frame):
 
 	# Functionality of the "Launch" button
 	def launch(self, r, c):
+		global projects
 		agent_id = self.agents_info[r-3]['AGENT_ID']
 		print("Launching agent", agent_id)
 		if(platform.system()=="Windows"):
-			proc = subprocess.Popen("py agent.py "+ agent_id + " " + self.project_name, shell=True ,creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+			proc = subprocess.Popen("py agent.py "+ agent_id + " " + self.project_name, shell=True, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
 		else:
 			proc = subprocess.Popen("python3 agent.py "+ agent_id + " " + self.project_name, shell=True, preexec_fn=os.setsid)
-		self.agent_pid_dict[self.project_name][agent_id] = proc
+		projects[self.project_name]["agent_pid_dict"][agent_id] = proc
+		print("Active processes: ", projects[self.project_name]["agent_pid_dict"], "\n")
 		time.sleep(2)
 		app.refresh()
 		
 	# Functionality of the "Stop" button.
 	def stop(self, r, c):
+		global projects
 		agent_id = self.agents_info[r-3]['AGENT_ID']
-		print("Stopping agent", agent_id, self.agent_pid_dict[self.project_name][agent_id])
-		if(platform.system()=="Windows"):
-			self.agent_pid_dict[self.project_name][agent_id].send_signal(signal.CTRL_BREAK_EVENT)
-			self.agent_pid_dict[self.project_name][agent_id].kill()
-		else:
-			os.killpg(os.getpgid(self.agent_pid_dict[self.project_name][agent_id].pid), signal.SIGTERM)
-		del  self.agent_pid_dict[self.project_name][agent_id]
-		print("Active processes: ", self.agent_pid_dict[self.project_name], "\n")
+		print("Stopping agent", agent_id, projects[self.project_name]["agent_pid_dict"][agent_id])
+		kill_process(projects[self.project_name]["agent_pid_dict"][agent_id])
+		del projects[self.project_name]["agent_pid_dict"][agent_id]
+		print("Active processes: ", projects[self.project_name]["agent_pid_dict"], "\n")
 		app.refresh()
 
 	# Functionality of the "Remove" button.
 	def remove(self, r, c):
+		global projects
 		agent_id = self.agents_info[r-3]['AGENT_ID']
 		agents_path = cloudbook_path + os.sep + self.project_name + os.sep + "agents"   # Path to "cloudbook/projectX/agents/"
 		config_agent_file_path = agents_path + os.sep + "config_" + agent_id + ".json"
 
-		if agent_id in self.agent_pid_dict[self.project_name]:
+		if agent_id in projects[self.project_name]["agent_pid_dict"]:
 			print(agent_id + " is running! It must be stopped to be removed.")
 			return
 		if os.path.exists(config_agent_file_path):
@@ -236,12 +265,12 @@ class AddAgentTab(ttk.Frame):
 	
 	# Functionality for the grant combobox selection
 	def switch(self, index):
-			switcher = {
-				0: "HIGH",
-				1: "MEDIUM",
-				2: "LOW"
-			}  
-			return switcher.get(index, "No se ha seleccionado nada, se usará MEDIUM como valor por defecto.")
+		switcher = {
+			0: "HIGH",
+			1: "MEDIUM",
+			2: "LOW"
+		}
+		return switcher.get(index, "No se ha seleccionado nada, se usará MEDIUM como valor por defecto.")
 	
 	# Functionality for create button. Recovers the already set information and calls the create_agent function from agent.py
 	def create(self):
@@ -338,16 +367,22 @@ class ProjectTab(ttk.Frame):
 		agents_info = projects[project_name]['agents_info']
 
 		self.notebook = ttk.Notebook(self)
-		
-		self.tab1 = GeneralInfoTab(self.notebook, agents_info=agents_info, project_name=project_name)
-		self.notebook.add(self.tab1, text="General Info", padding=10)
 
-		self.tab2 = AddAgentTab(self.notebook, agents_info=agents_info, project_name=project_name)
-		self.notebook.add(self.tab2, text="Add Agents", padding=10)
+		self.tabs = {}
 
+		self.tabs["GeneralInfoTab"] = GeneralInfoTab(self.notebook, agents_info=agents_info, project_name=project_name)
+		self.notebook.add(self.tabs["GeneralInfoTab"], text="General Info", padding=10)
+
+		self.tabs["AddAgentTab"] = AddAgentTab(self.notebook, agents_info=agents_info, project_name=project_name)
+		self.notebook.add(self.tabs["AddAgentTab"], text="Add Agents", padding=10)
+
+		self.tabs["AgentXTab"] = []
 		for info in agents_info:
-			globals()['self.'+str(info)] = AgentXTab(self.notebook, agent=agents_info[info], project_name=project_name)
-			self.notebook.add(globals()['self.'+str(info)], text="Agent "+str(info), padding=10)
+			# globals()['self.agents_info'+str(info)] = AgentXTab(self.notebook, agent=agents_info[info], project_name=project_name)
+			# self.notebook.add(globals()['self.agents_info'+str(info)], text="Agent "+str(info), padding=10)
+			self.tabs["AgentXTab"].append(None)
+			self.tabs["AgentXTab"][info] = AgentXTab(self.notebook, agent=agents_info[info], project_name=project_name)
+			self.notebook.add(self.tabs["AgentXTab"][info], text="Agent "+str(info), padding=10)
 
 		self.notebook.pack(expand=True, fill="both")
 		self.pack(expand=True, fill="both")
@@ -385,11 +420,14 @@ class Application(ttk.Frame):
 		self.notebook = ttk.Notebook(self)
 
 		for project in projects:
-			globals()['self.'+project] = ProjectTab(self.notebook, project_name=project)
-			self.notebook.add(globals()['self.'+project], text=project, padding=10)
+			globals()['ProjectTab_'+project] = ProjectTab(self.notebook, project_name=project)
+			self.notebook.add(globals()['ProjectTab_'+project], text=project, padding=10)
 		
 		if focused_tab is not None:
-			self.notebook.select(globals()["self." + focused_tab])
+			try:
+				self.notebook.select(globals()["ProjectTab_" + focused_tab])
+			except:
+				pass
 
 		self.notebook.pack(expand=True, fill="both")
 		self.pack(expand=True, fill="both")

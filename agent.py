@@ -9,19 +9,17 @@ import urllib # this import requires pip3 install urllib
 import queue
 import socket
 import random, string
+import builtins
 
 
 
 #####   GLOBAL VARIABLES   #####
 
 # Identifier of this agent
-my_agent_ID = "None"
-
-# Identifier of the circle that this agent belongs to
-#my_circle_ID = "None"
+my_agent_ID = None
 
 # Identifier of the project that this agent belongs to
-my_project_name = "None"
+my_project_name = None
 
 # Dictionary of dus and location
 #cloudbook_dict_dus = {}
@@ -60,7 +58,7 @@ else:
 	cloudbook_path = "/etc/cloudbook/"
 
 # Path to the project the agent belongs to
-project_path = "None"
+project_path = None
 
 # Variable that contains the information from agents_grant.json (last read)
 #Format:
@@ -84,6 +82,29 @@ cloudbook_version = 0
 CRIT_ERR_NO_ANSWER = "CLOUDBOOK CRITICAL ERROR: no agent could answer the remote invokation to a function in a critical DU. \
 The DU state is lost and program is corrupt. Critical alarm created in the distributed filesystem in order that depployer's \
 surveillance monitor knows that an invokation has failed. BaseException raised in order to try to stop the program."
+CRIT_ERR_IP_NOT_FOUND = "ERROR: cannot find the ip and port for invoking the desired agent."
+ERR_QUEUE_KEY_VALUE = "ERROR: There was a problem item obtained from the queue. Wrong key/value."
+ERR_READ_WRITE = "ERROR: reading/writing not allowed or wrong path."
+
+
+
+#####   OVERLOAD BUILT-IN FUNCITONS   #####
+
+# Print function overloaded in order to make it print the id before anything and then keep track of the traces of each agent.
+def print(*args, **kwargs):
+	# If the print is just a separation, i.e.:  print()  keep it like that
+	if len(args)==1 and len(kwargs)==0 and args[0]=='':
+		builtins.print()
+		return
+
+	# If the agent ID has been already set
+	if my_agent_ID is not None:
+		if my_agent_ID == "agent_0": 	# For the agent_0 add dots to make it start at the same letter column in the console
+			builtins.print(my_agent_ID + "...................:", *args, **kwargs)
+		else:
+			builtins.print(my_agent_ID + ":", *args, **kwargs)
+	else: 	# For the case in which the ID is None, print it with the normal built-in
+		builtins.print(*args, **kwargs)
 
 
 
@@ -93,8 +114,8 @@ application = Flask(__name__)
 
 @application.route("/", methods=['GET', 'PUT', 'POST'])
 def hello():
-	print ("hello world")
-	return  "Hello"
+	print("Hello world")
+	return "Hello"
 
 @application.route("/invoke", methods=['GET','POST'])
 def invoke(configuration = None):
@@ -116,11 +137,11 @@ def invoke(configuration = None):
 	global stats_dict
 
 	while not dus_loaded:
-		print(my_agent_ID, ": Invoked but waiting for dus to be loaded.")
+		print("Invoked but waiting for dus to be loaded.")
 		time.sleep(1)
 
 	print("=====AGENT: /INVOKE=====")
-	print("Thread ID: ", threading.get_ident())
+	print("Thread ID:", threading.get_ident())
 	invoked_data = ""
 	print("REQUEST.form: ", request.form)
 	invoked_function = request.args.get('invoked_function')
@@ -130,15 +151,14 @@ def invoke(configuration = None):
 		invoker_function = None
 	for i in request.form:
 		invoked_data = i
-	print("INVOKED DATA: ", invoked_data)
-	print ("invoked_function = "+invoked_function)
+	print("INVOKED DATA:", invoked_data)
+	print("invoked_function:", invoked_function)
 
 	# Separate du and function
 	j = invoked_function.find(".")
 	invoked_du = invoked_function[0:j]
-	print("Yo soy", my_agent_ID)
-	print ("invoked_du ", invoked_du)
-	print("TEST: DU_LIST",du_list)
+	print("invoked_du:", invoked_du)
+	print("du_list:", du_list)
 	
 	# Queue data stats
 	stats_data = {}
@@ -150,9 +170,9 @@ def invoke(configuration = None):
 	if invoked_du in du_list:
 		resul = eval(invoked_function+"("+invoked_data+")")
 	else:
-		print ("this function does not belong to this agent")
+		print("This function does not belong to this agent.")
 		resul = "none" #remote_invoke(invoked_du, invoked_function) Is this neccesary?
-	print ("\n")
+	print()
 	return resul
 
 def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function = None, configuration = None):
@@ -194,7 +214,7 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 	remote_du = invoked_du[0]
 
 	if remote_du in du_list and remote_du != 'du_default':
-		print ("local invocation: ",invoked_function)
+		print("local invocation: ",invoked_function)
 		print(invoked_du, invoked_function, invoked_data)
 		#res=eval(invoked_function)
 		print("Hago eval de: "+ invoked_du[0]+"."+invoked_function+"("+invoked_data+")")
@@ -228,7 +248,7 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 	i = 0
 	while i < len(list_agents):
 		remote_agent = invocation_agents_list[i]
-		print ("The selected remote agent to invoke is: ", remote_agent, " from list ", list_agents, " rewritten as ", invocation_agents_list)
+		print("The selected remote agent to invoke is: ", remote_agent, " from list ", list_agents, " rewritten as ", invocation_agents_list)
 
 		# Update round robin index
 		if len(list_agents) > 1:
@@ -238,20 +258,20 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 			desired_host_ip_port = invocation_agents_grant[remote_agent]['IP'] + ":" + str(invocation_agents_grant[remote_agent]['PORT'])
 			print("Host ip and port: ", desired_host_ip_port)
 		except Exception as e:
-			print("ERROR: cannot find the ip and port for invoking the desired agent!")
-			raise e 	# Maybe set alarm???
+			print(CRIT_ERR_IP_NOT_FOUND)
+			raise e 	# This should never happen
 
 		try:
 			if invoker_function == None:
 				url = 'http://'+desired_host_ip_port+"/invoke?invoked_function="+remote_du+"."+invoked_function
 			else:
 				url = 'http://'+desired_host_ip_port+"/invoke?invoked_function="+remote_du+"."+invoked_function+"&invoker_function="+invoker_function
-			print (url)
+			print(url)
 
 			send_data = invoked_data.encode()
 			print("Sending data: ",send_data)
 			request_object = urllib.request.Request(url, send_data)
-			print ("Request launched: ", url)
+			print("Request launched: ", url)
 			r = urllib.request.urlopen(request_object)
 			break
 		except:
@@ -265,7 +285,7 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 					write_alarm("CRITICAL")
 					# while True:
 					# 	time.sleep(1)
-					# 	print(my_agent_ID, ": this agent must be restarted. It is currently not possible to recover from this situation.")
+					# 	print(This agent must be restarted. It is currently not possible to recover from this situation.")
 					raise BaseException(CRIT_ERR_NO_ANSWER)
 				else: 	# If the du is NOT critical
 					print("The function that could not be invoked is in a NON-critical du: ", remote_du + "." + invoked_function)
@@ -291,7 +311,7 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 	# end_of_while
 		
 	# If the loop finishes with break, then a response has been received and this invocation and function finishes normally.
-	print ("Response received")
+	print("Response received")
 
 	try: 		# For functions that return some json
 		data = r.read().decode()
@@ -396,7 +416,7 @@ def create_stats(t1):
 				invoker = item['invoker']
 				invoked = item['invoked']
 			except:
-				print("ERROR: There was a problem with the stat item obtained from the queue. Key invoker/invoked not present")
+				print(ERR_QUEUE_KEY_VALUE, "Stats queue needs invoker/invoked keys.")
 
 			try:
 				if invoker != None:
@@ -539,7 +559,7 @@ def create_grant(agent_grant_interval, init_grant, int_port=0, fs_path=''):
 	# print('cloudbookjson_file_path = ', cloudbookjson_file_path)
 	# write_agent_X_grant_file()
 	# while not os.path.exists(agents_grant_file_path) or not os.path.exists(cloudbookjson_file_path) or os.stat(cloudbookjson_file_path).st_size==0:
-	# 	print("Waiting for agents_grant.json and cloudbook.json (", my_agent_ID,")")
+	# 	print("Waiting for agents_grant.json and cloudbook.json")
 	# 	time.sleep(1)
 	# read_agents_grant_file()
 	# read_cloudbook_file()
@@ -621,8 +641,6 @@ if __name__ == "__main__":
 	agent_grant_interval = configjson_dict['AGENT_GRANT_INTERVAL']
 	lan_mode = configjson_dict['LAN']
 
-	print ("my_agent_ID = " + my_agent_ID)
-
 	# Check lan mode is on or off to use internal or external ips and ports respectively
 	if lan_mode:
 		# Check the first port available from 5000 (included) onwards
@@ -651,7 +669,7 @@ if __name__ == "__main__":
 	init_grant = my_grant
 	int_port = local_port
 	##########################################
-	print("Agent info (grant,ip,port) file creator thread starts execution")
+	print("Agent info (grant,ip,port) file creator thread starts execution.")
 	time_start = time.monotonic()
 
 	# Get IPs and ports and verify they are correct
@@ -674,7 +692,7 @@ if __name__ == "__main__":
 	# Check if fs_path is not empty
 	if fs_path=='':
 		fs_path = poject_path + os.sep + "distributed"
-		print("Path to distributed filesystem was not set in the agent, default will be used: ")
+		print("Path to distributed filesystem was not set in the agent, default will be used: ", fs_path)
 
 	agent_X_grant_file_path = project_path + os.sep + "distributed" + os.sep + "agents_grant" + os.sep + my_agent_ID+"_grant.json"
 	agents_grant_file_path = project_path + os.sep + "distributed" + os.sep + "agents_grant.json"
@@ -770,10 +788,10 @@ if __name__ == "__main__":
 		hot_redeploy = False
 		cold_redeploy = False
 		if os.path.exists(hot_redeploy_file_path):
-			print(my_agent_ID, ": HOT_REDEPLOY file found.")
+			print("HOT_REDEPLOY file found.")
 			hot_redeploy = True
 		if os.path.exists(cold_redeploy_file_path):
-			print(my_agent_ID, ": COLD_REDEPLOY file found.")
+			print("COLD_REDEPLOY file found.")
 			cold_redeploy = True
 		return (hot_redeploy, cold_redeploy)
 
@@ -791,16 +809,16 @@ if __name__ == "__main__":
 		try:
 			write_agent_X_grant_file()
 			while not os.path.exists(agents_grant_file_path) or not os.path.exists(cloudbookjson_file_path) or os.stat(cloudbookjson_file_path).st_size==0:
-				print("Waiting for agents_grant.json and cloudbook.json (", my_agent_ID,")")
+				print("Waiting for agents_grant.json and cloudbook.json")
 				if not os.path.exists(agent_X_grant_file_path):
-					print(my_agent_ID + ": my grant file was deleted!")
+					print("My grant file was deleted! Creating again...")
 					write_agent_X_grant_file()
 				time.sleep(1)
 			read_agents_grant_file()
 			read_cloudbook_file()
 			time.sleep(1)
 		except:
-			print("ERROR: Read error")
+			print(ERR_READ_WRITE)
 			time.sleep(1)
 
 	print("My du_list: ", du_list)
@@ -841,9 +859,9 @@ if __name__ == "__main__":
 				if item_grant=='HIGH' or item_grant=='MEDIUM' or item_grant=='LOW':
 					grant = item_grant
 				else:
-					print("ERROR: The grant obtained from the queue is not valid. Invalid value.")
+					print(ERR_QUEUE_KEY_VALUE, "Grant queue invalid value.")
 			except:
-				print("ERROR: There was a problem with the grant item obtained from the queue. Invalid key.")
+				print(ERR_QUEUE_KEY_VALUE, "Grant queue invalid key.")
 
 		# When the the interval time expires
 		if current_time-time_start >= agent_grant_interval:
@@ -899,7 +917,7 @@ if __name__ == "__main__":
 
 
 	# # LOAD DEPLOYABLE UNITS
-	# print ("Loading deployable units for agent " + my_agent_ID + "...")
+	# print("Loading deployable units for agent " + my_agent_ID + "...")
 	# #cloudbook_dict_agents = loader.load_cloudbook_agents()
 
 	# # It will only contain info about agent_id : du_assigned (not IP)

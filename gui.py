@@ -21,7 +21,7 @@ projects = {}
 if(platform.system()=="Windows"):
 	cloudbook_path = os.environ['HOMEDRIVE'] + os.environ['HOMEPATH'] + os.sep + "cloudbook"
 else:
-	cloudbook_path = "/etc/cloudbook"
+	cloudbook_path = os.environ['HOME'] + os.sep + "cloudbook"
 
 
 

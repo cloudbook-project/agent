@@ -55,7 +55,7 @@ grant_queue = queue.Queue(maxsize=0)
 if(platform.system()=="Windows"):
 	cloudbook_path = os.environ['HOMEDRIVE'] + os.environ['HOMEPATH'] + os.sep + "cloudbook"
 else:
-	cloudbook_path = "/etc/cloudbook/"
+	cloudbook_path = os.environ['HOME'] + os.sep + "cloudbook"
 
 # Path to the project the agent belongs to
 project_path = None

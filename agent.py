@@ -168,7 +168,10 @@ def invoke(configuration = None):
 
 	# If the function belongs to the agent
 	if invoked_du in du_list:
-		resul = eval(invoked_function+"("+invoked_data+")")
+		try:
+			resul = eval(invoked_function+"("+invoked_data+")")
+		except:
+			resul = eval(invoked_function+"('"+invoked_data+"')")
 	else:
 		print("This function does not belong to this agent.")
 		resul = "none" #remote_invoke(invoked_du, invoked_function) Is this neccesary?

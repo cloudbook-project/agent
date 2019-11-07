@@ -28,8 +28,8 @@ def load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents, configuration =
 	#for key, value in my_agent_dict.items():
 	#	du_list=value
 
-	print (du_list)
-	print ("du_list to load: "+str(du_list))
+	#print (du_list)
+	#print ("du_list to load: "+str(du_list))
 	return du_list
 	#return ["du_0"]
 

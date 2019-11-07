@@ -1,9 +1,9 @@
 from flask import Flask
 from flask import request
-from flask import abort, redirect, url_for
+#from flask import abort, redirect, url_for
 import loader
 import os, sys, time, threading, logging, platform
-from multiprocessing import Process
+from multiprocessing import Process, Queue
 from pynat import get_ip_info #requires pip3 install pynat
 import urllib # this import requires pip3 install urllib
 import queue
@@ -21,9 +21,6 @@ my_agent_ID = None
 # Identifier of the project that this agent belongs to
 my_project_name = None
 
-# Dictionary of dus and location
-#cloudbook_dict_dus = {}
-
 # Dictionary of agents 
 cloudbook_dict_agents = {}
 
@@ -35,12 +32,6 @@ agent_config_dict = {}
 
 # Dictionary of circle configuration
 configjson_dict = {}
-
-# Global variable to define working mode
-#LOCAL_MODE = False
-
-# All dus that contain the program
-all_dus = []
 
 # Index in order to make the round robin assignation of invocation requests
 round_robin_index = 0
@@ -59,6 +50,9 @@ else:
 
 # Path to the project the agent belongs to
 project_path = None
+
+#Path to the distributed filesystem
+fs_path = None
 
 # Variable that contains the information from agents_grant.json (last read)
 #Format:
@@ -79,18 +73,32 @@ cloudbook_version = 0
 
 
 #####   CONSTANTS   #####
-CRIT_ERR_NO_ANSWER = "CLOUDBOOK CRITICAL ERROR: no agent could answer the remote invokation to a function in a critical DU. \
+CRIT_ERR_NO_ANSWER = "CLOUDBOOK CRITICAL ERROR: no agent could answer the remote invocation to a function in a critical DU. \
 The DU state is lost and program is corrupt. Critical alarm created in the distributed filesystem in order that depployer's \
-surveillance monitor knows that an invokation has failed. BaseException raised in order to try to stop the program."
-CRIT_ERR_IP_NOT_FOUND = "ERROR: cannot find the ip and port for invoking the desired agent."
-ERR_QUEUE_KEY_VALUE = "ERROR: There was a problem item obtained from the queue. Wrong key/value."
+surveillance monitor knows that an invocation has failed. The Flask process will be stopped and restarted."
+ERR_IP_NOT_FOUND = "ERROR: cannot find the ip and port for invoking the desired agent."
+ERR_QUEUE_KEY_VALUE = "ERROR: there was a problem item obtained from the queue. Wrong key/value."
 ERR_READ_WRITE = "ERROR: reading/writing not allowed or wrong path."
+ERR_FLASK_PORT_IN_USE = "ERROR: this agent is using a port that was checked to be free but, due to race conditions, another \
+agent did the same and started using it before."
+ERR_DUS_NOT_EXIST = "ERROR: could not load the specified DU(s), because file(s) did not exist."
+GEN_ERR_LAUNCHING_FLASK = "GENERIC ERROR: something went wrong when launching the flask thread."
+GEN_ERR_LOADING_DUS = "GENERIC ERROR: something went wrong when loading DUs."
+ERR_DUS_ALREADY_LOADED = "ERROR: a list of DU(s) has already been loaded."
+ERR_NO_LAN = "ERROR: the local IP was not found. The device is not connected to internet nor any LAN."
+ERR_NO_INTERNET = "ERROR: external IP or port not found. Either the device is not conected to the internet or the STUN server \
+did not accept the request."
+GEN_ERR_RESTARTING_FLASK = "GENERIC ERROR: something went wrong when restarting the flask process."
+GEN_ERR_INIT_CHECK_FLASK = "GENERIC ERROR: something whent wrong when initializing of checking that FlaskProcess was up and \
+running correctly."
+ERR_GET_ID_REFUSED = "ERROR: conection refused when FlaskProcess was trying to check the id of the agent running on the \
+requested port."
 
 
 
 #####   OVERLOAD BUILT-IN FUNCITONS   #####
 
-# Print function overloaded in order to make it print the id before anything and then keep track of the traces of each agent.
+# Print function overloaded in order to make it print the id before anything and keep track of the traces of each agent easier.
 def print(*args, **kwargs):
 	# If the print is just a separation, i.e.:  print()  keep it like that
 	if len(args)==1 and len(kwargs)==0 and args[0]=='':
@@ -116,6 +124,11 @@ application = Flask(__name__)
 def hello():
 	print("Hello world")
 	return "Hello"
+
+@application.route("/get_agent_id", methods=['GET', 'PUT', 'POST'])
+def get_agent_id():
+	print("/get_agent_id route has been invoked.")
+	return my_agent_ID
 
 @application.route("/invoke", methods=['GET','POST'])
 def invoke(configuration = None):
@@ -205,7 +218,7 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 	def write_alarm(alarm_name):
 		possible_alarms = ["CRITICAL", "WARNING"]
 		assert alarm_name in possible_alarms
-		alarm_file_path = agent_config_dict["DISTRIBUTED_FS"] + os.sep + alarm_name
+		alarm_file_path = fs_path + os.sep + alarm_name
 		open(alarm_file_path, 'a').close() 	# Create an alarm file if it does not exist
 		print(alarm_name, " alarm file has been created.")
 
@@ -261,7 +274,7 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 			desired_host_ip_port = invocation_agents_grant[remote_agent]['IP'] + ":" + str(invocation_agents_grant[remote_agent]['PORT'])
 			print("Host ip and port: ", desired_host_ip_port)
 		except Exception as e:
-			print(CRIT_ERR_IP_NOT_FOUND)
+			print(ERR_IP_NOT_FOUND)
 			raise e 	# This should never happen
 
 		try:
@@ -283,13 +296,16 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 
 			if remote_agent == last_agent: 	# If all agents have been tested
 				print("No agents available to execute the requested function.")
+				critical_dus_file_path = fs_path + os.sep + "critical_dus.json"
+				critical_dus_dict = loader.load_dictionary(critical_dus_file_path)
+				critical_dus = critical_dus_dict["critical_dus"]
 				if remote_du in critical_dus: 	# If the du is critical
 					print("The function that could not be invoked is in a critical du: ", remote_du + "." + invoked_function)
 					write_alarm("CRITICAL")
-					# while True:
-					# 	time.sleep(1)
-					# 	print(This agent must be restarted. It is currently not possible to recover from this situation.")
-					raise BaseException(CRIT_ERR_NO_ANSWER)
+					while True:
+						time.sleep(1)
+						print("This agent has detected a problem and will be automatically restarted.")
+					# raise BaseException(CRIT_ERR_NO_ANSWER)
 				else: 	# If the du is NOT critical
 					print("The function that could not be invoked is in a NON-critical du: ", remote_du + "." + invoked_function)
 					
@@ -332,11 +348,7 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 # Checks the OS to adapt the path of the folders.
 # Generates a default configuration file that is edited and adapted afterwards.
 def create_agent(grant, project_name, fs=False, agent_0=False):
-	global my_agent_ID
-	global my_project_name
-	global project_path
 
-	my_project_name = project_name
 	# Check paths existence and create if they do not.
 	if not os.path.exists(cloudbook_path):
 		os.makedirs(cloudbook_path)
@@ -353,13 +365,13 @@ def create_agent(grant, project_name, fs=False, agent_0=False):
 		id_num = 0
 	else:
 		id_num = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20))
-	my_agent_ID = "agent_" + str(id_num)
-	agent_config_dict['AGENT_ID'] = my_agent_ID
+	agent_ID = "agent_" + str(id_num)
+	agent_config_dict['AGENT_ID'] = agent_ID
 	agent_config_dict['GRANT_LEVEL'] = grant
 	agent_config_dict['DISTRIBUTED_FS'] = fs
 
 	# Write dictionary in file
-	config_file_path = poject_path + os.sep + "agents" + os.sep + "config_"+my_agent_ID+".json"
+	config_file_path = poject_path + os.sep + "agents" + os.sep + "config_"+agent_ID+".json"
 	loader.write_dictionary(agent_config_dict, config_file_path)
 
 	print("\n---  NEW AGENT CREATED  ----------------------------------------------------------------------------")
@@ -390,15 +402,161 @@ def edit_agent(agent_id, project_name, new_grant='', new_fs=''):
 
 
 # This function launches the flask server in the port given as parameter.
-def flaskThreaded(port):
+def flaskThreaded(port, sock):
 	port = int(port)
 	print("Launched in port:", port)
-	application.run(debug=False, host="0.0.0.0",port=port,threaded=True)
+	sock.close()
+	application.run(debug=False, host="0.0.0.0", port=port, threaded=True)
 	print("00000000000000000000000000000000000000000000000000000000000000000000000000")
 
-# This function raises an error
-def raise_error():
-	raise BaseException("Exception solicitada por main del agente")
+# This function is used in a new process and coordinates the queues for loading data and the DUs to allow Flask execution.
+# El proceso FlaskProcess:
+# 	Espera para siempre mirando mp_agent2flask_queue cada 1s:
+# 		Si hay init_info: {"init_info": {"my_agent_ID": my_agent_ID, "my_project_name": my_project_name, "fs_path": fs_path,
+#										"start_port_search": start_port_search}}
+# 			Carga la info
+# 			Crea project_path
+# 		Si hay launch: {"launch": True}
+# 			Lanza el FlaskThread (en el que se lanza la app que queda corriendo automaticamente para atender los invokes)
+# 			Se compara el id del agente con el que devuelve flask en el puerto  en el que se ha intentado lanzar:
+# 				Si es igual: se manda por mp_flask2agent_queue el dato {"flask_proc_ok":{"port": local_port}}
+# 				Si es distinto: se manda por mp_flask2agent_queue el dato {"restart_flask_proc": ERR_FLASK_PORT_IN_USE}
+# 		Si hay after_launch_info: {"after_launch_info": {"du_list": du_list, "cloudbook_dict_agents": cloudbook_dict_agents,
+#														"agents_grant": agents_grant}}
+# 			Recarga diccionarios
+# 			Incializa cloudbook_version a 1
+# 			Carga du_list
+# 		Si hay hot_redeploy: {"hot_redeploy": {"cloudbook_dict_agents": cloudbook_dict_agents, "agents_grant": agents_grant}}
+# 			Recarga diccionarios
+# 			Aumenta cloudbook_version
+def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue):
+	print("Flask Process is now active")
+	# NOT USED globals: configjson_dict, agent_config_dict, stats_queue, grant_queue
+	# NOT MODIFIED globals: cloudbook_path, round_robin_index
+
+	# Note: this global variables belong to other process so its values are the ones described above (just after the imports)
+	# init_info vars:
+	global my_agent_ID
+	global my_project_name
+	global fs_path
+	global project_path
+	start_port_search = 5000
+
+	# launch vars:
+	flask_thread = None
+
+	# after_launch_info vars:
+	global cloudbook_dict_agents
+	global agents_grant
+	global cloudbook_version
+	global du_list
+	global dus_loaded
+
+	# hot_redeploy vars:
+	# global cloudbook_dict_agents
+	# global agents_grant
+	# global cloudbook_version
+
+	while True:
+		while not mp_agent2flask_queue.empty():
+			item = mp_agent2flask_queue.get()
+			
+			if "init_info" in item:
+				try:
+					my_agent_ID = item["init_info"]["my_agent_ID"]
+					my_project_name = item["init_info"]["my_project_name"]
+					fs_path = item["init_info"]["fs_path"]
+					start_port_search = item["init_info"]["start_port_search"]
+
+					project_path = cloudbook_path + os.sep + my_project_name
+				except Exception as e:
+					print(ERR_QUEUE_KEY_VALUE)
+					raise e
+
+			elif "launch" in item:
+				try:
+					launch = item["launch"]
+				except Exception as e:
+					print(ERR_QUEUE_KEY_VALUE)
+					raise e
+				try:
+					if launch and not flask_thread:
+						(local_port, sock) = get_port_available(port=start_port_search)
+
+						print("Trying to start Flask on port", local_port)
+						flask_thread = threading.Thread(target=flaskThreaded, args=[local_port, sock])
+						flask_thread.setDaemon(True)
+						flask_thread.start()
+
+						retrieved_id = None
+						while not retrieved_id:
+							try:
+								retrieved_data = urllib.request.urlopen("http://localhost:"+str(local_port)+"/get_agent_id")
+								retrieved_id = retrieved_data.read().decode('UTF-8')
+							except Exception as e:
+								print(ERR_GET_ID_REFUSED)
+								print("Retrying...")
+						
+						mp_queue_data = {}
+						if my_agent_ID == retrieved_id:
+							mp_queue_data["flask_proc_ok"] = {}
+							mp_queue_data["flask_proc_ok"]["port"] = local_port
+						else:
+							print(ERR_FLASK_PORT_IN_USE) # This is the 2nd flask in the same port (race conditions)
+							print("The flask process will be restarted automatically.")
+							mp_queue_data["restart_flask_proc"] = ERR_FLASK_PORT_IN_USE
+						mp_flask2agent_queue.put(mp_queue_data)
+				except Exception as e:
+					print(GEN_ERR_LAUNCHING_FLASK)
+					raise e
+
+			elif "after_launch_info" in item:
+				if dus_loaded:
+					print(ERR_DUS_ALREADY_LOADED)
+				try:
+					cloudbook_dict_agents = item["after_launch_info"]["cloudbook_dict_agents"]
+					agents_grant = item["after_launch_info"]["agents_grant"]
+					cloudbook_version = 1
+
+					du_list = item["after_launch_info"]["du_list"]
+				except Exception as e:
+					print(ERR_QUEUE_KEY_VALUE)
+					raise e
+				try:
+					print("The list of DUs to load in this agent is:", du_list)
+					sys.path.append(fs_path)
+					du_files_path = fs_path + os.sep + "du_files"
+					for du in du_list:
+						print("  Trying to load", du)
+						du_i_file_path = du_files_path + os.sep + du+".py"
+						if not os.path.exists(du_i_file_path):
+							print(ERR_DUS_NOT_EXIST)
+							time.sleep(1)
+						exec("global "+du, globals())
+						exec("from du_files import "+du, globals())
+						exec(du+".invoker=outgoing_invoke")
+						print("  ", du, "successfully loaded")
+					
+					print("All DUs have been loaded successfully.")
+					dus_loaded = True
+				except Exception as e:
+					print(GEN_ERR_LOADING_DUS)
+					raise e
+
+			elif "hot_redeploy" in item:
+				try:
+					cloudbook_dict_agents = item["hot_redeploy"]["cloudbook_dict_agents"]
+					agents_grant = item["hot_redeploy"]["agents_grant"]
+
+					cloudbook_version += 1
+				except Exception as e:
+					print(ERR_QUEUE_KEY_VALUE)
+					raise e
+
+			else:
+				print(ERR_QUEUE_KEY_VALUE)
+
+		time.sleep(1)
 
 
 # Target function of the stats file creator thread. Implements the consumer of the producer/consumer model using stats_queue.
@@ -432,8 +590,6 @@ def create_stats(t1):
 						stats_dictionary[invoked] = {} 			# Key 'invoked' not in the stats dictionary --> create it (empty)
 						stats_dictionary[invoked][invoker] = 1 	# Create key 'invoker' in the 'invoked' dictionary and set it 1
 
-			stats_queue.task_done()
-
 		# In case that it is time to create the stats file, add t1 to time_start and write the dictionary in the stats_agent_XX.json
 		if current_time-time_start >= t1:
 			time_start += t1
@@ -444,182 +600,143 @@ def create_stats(t1):
 		time.sleep(1)
 
 
-# Target function of the grant file creator thread. Implements the consumer of the producer/consumer model using  grant_queue.
-# If the internal port is given it is used with the local IP. Otherwise, external IP and port are used.
-def create_grant(agent_grant_interval, init_grant, int_port=0, fs_path=''):
-	print("Agent info (grant,ip,port) file creator thread starts execution")
-	time_start = time.monotonic()
+# This function passes the initial data to the FlaskProcess through the mp_queue, tells it to launch the FlaskThread and checks
+# if it has worked correctly with no port collisions. If everything is ok, retrives the used local_port. If there is a problem
+# (a port collision), restarts the FlaskProcess.
+def init_flask_process_and_check_ok():
+	global my_agent_ID, my_project_name, fs_path, start_port_search, mp_flask2agent_queue, mp_agent2flask_queue, flask_proc
+	# Pass the init_info to the FlaskProcess
+	# {"init_info": {"my_agent_ID": my_agent_ID, "my_project_name": my_project_name, "fs_path": fs_path, 
+	#				"start_port_search": start_port_search}}
+	init_info_item = {}
+	init_info_item["init_info"] = {}
+	init_info_item["init_info"]["my_agent_ID"] = my_agent_ID
+	init_info_item["init_info"]["my_project_name"] = my_project_name
+	init_info_item["init_info"]["fs_path"] = fs_path
+	init_info_item["init_info"]["start_port_search"] = start_port_search
+	mp_agent2flask_queue.put(init_info_item)
 
-	# Get IPs and ports and verify they are correct
-	(_, ext_ip, ext_port, int_ip) = get_ip_info(include_internal=True)
-	while ext_ip==None or ext_port==None or int_ip==None:
-		(_, ext_ip, ext_port, int_ip) = get_ip_info(include_internal=True)
-	print("ext_ip, ext_port, int_ip, int_port:", ext_ip, ext_port, int_ip, int_port)
+	# Tell the FlaskProcess to launch the FlaskThread
+	# {"launch": True}
+	launch_item = {}
+	launch_item["launch"] = True
+	mp_agent2flask_queue.put(launch_item)
 
-	# Create and fill dictionary with initial data
-	grant_dictionary = {}
-	grant_dictionary[my_agent_ID] = {}
-	grant_dictionary[my_agent_ID]["GRANT"] = init_grant
-	if int_port==0: 	# If no internal port is given, use externals
-		grant_dictionary[my_agent_ID]["IP"] = ext_ip
-		grant_dictionary[my_agent_ID]["PORT"] = ext_port
-	else: 				# Use internal IP and port
-		grant_dictionary[my_agent_ID]["IP"] = int_ip
-		grant_dictionary[my_agent_ID]["PORT"] = int_port
+	# Check the FlaskProcess launched the FlaskThread correctly and there are no collisions on ports (and retrieve local_port).
+	# If there is a port collision, restart the FlaskProcess
+	flask_proc_ok = False
+	while not flask_proc_ok:
+		while not mp_flask2agent_queue.empty():
+			item = mp_flask2agent_queue.get()
 
-	# Check if fs_path is not empty
-	if fs_path=='':
-		fs_path = poject_path + os.sep + "distributed"
-		print("Path to distributed filesystem was not set in the agent, default will be used: ")
+			if "flask_proc_ok" in item:
+				try:
+					local_port = item["flask_proc_ok"]["port"]
+					flask_proc_ok = True
+					break
+				except Exception as e:
+					print(ERR_QUEUE_KEY_VALUE)
+					raise e
 
-	agent_X_grant_file_path = project_path + os.sep + "distributed" + os.sep + "agents_grant" + os.sep + my_agent_ID+"_grant.json"
-	agents_grant_file_path = project_path + os.sep + "distributed" + os.sep + "agents_grant.json"
-	cloudbookjson_file_path = fs_path + os.sep + "cloudbook.json"
+			elif "restart_flask_proc" in item:
+				# try:
+				# 	restart_reason = item["restart_flask_proc"]
+				# 	print(restart_reason)
+				# except Exception as e:
+				# 	print(ERR_QUEUE_KEY_VALUE)
+				# 	raise e
+				try:
+					print("Restarting the flask process...")
+					# Create new mp_queues (so that they are clear)
+					mp_agent2flask_queue = Queue()
+					mp_flask2agent_queue = Queue()
 
-	# Internal function to write the "agent_X_grant.json" file consumed by the deployer
-	def write_agent_X_grant_file():
-		#print("Grant file will be updated with: ", grant_dictionary)
-		loader.write_dictionary(grant_dictionary, agent_X_grant_file_path)
+					# Terminate and create a new FlaskProcess
+					flask_proc.terminate()
+					flask_proc = Process(target=flaskProcessFunction, args=(mp_agent2flask_queue, mp_flask2agent_queue))
+					flask_proc.start()
 
-	# Internal function to load the "agents_grant.json" file created by the deployer
-	def read_agents_grant_file():
-		global agents_grant
-		agents_grant = loader.load_dictionary(agents_grant_file_path)
-		#print("agents_grant.json has been read.\n agents_grant = ", agents_grant)
+					# Pass initial info and launch
+					mp_agent2flask_queue.put(init_info_item)
+					mp_agent2flask_queue.put(launch_item)
+					break
 
-	# Internal function to load the "cloudbook.json" file created by the deployer
-	def read_cloudbook_file():
-		global cloudbook_dict_agents
-		global all_dus
-		cloudbook_dict_agents = loader.load_dictionary(cloudbookjson_file_path)
-		#print("cloudbook.json has been read.\n cloudbook_dict_agents = ", cloudbook_dict_agents)
+				except Exception as e:
+					print(GEN_ERR_RESTARTING_FLASK)
+					raise e
 
-		# Get all dus
-		all_dus = []
-		for i in cloudbook_dict_agents:
-			all_dus.append(i)
+			else:
+				print(ERR_QUEUE_KEY_VALUE)
 
-	# # Internal function to import the DUs in the agent
-	# def import_DUs_into_agent():
-	# 	global du_list
+		time.sleep(1)
 
-	# 	# Load the DUs that belong to this agent.
-	# 	du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
-	# 	print("My du_list: ", du_list)
-
-	# 	sys.path.append(fs_path)
-	# 	'''for du in du_list:
-	# 		exec ("from du_files import "+du)
-	# 		exec(du+".invoker=outgoing_invoke")'''
-
-	# 	du_files_path = fs_path + os.sep + "du_files"
-	# 	UNIX_du_files_path = du_files_path.replace(os.sep, "/")
-	# 	for du in du_list:
-	# 		print(du)
-	# 		du_i_file_path = du_files_path + os.sep + du+".py"
-	# 		while not os.path.exists(du_i_file_path):
-	# 			time.sleep(0.1)
-	# 		##OJO CON ESTO QUE HAY QUE PROBARLO BIEN BIEN
-	# 		exec('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
-	# 		# exec("from du_files import "+du)
-	# 		globals()[du] = __import__(du, fromlist=["du_files"])
-	# 		globals()[du+'invoker'] = outgoing_invoke
-	# 		#exec(du+".invoker=outgoing_invoke")# read file
-	# 		print(du+" charged")
-			
-	# 		# exec('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
-	# 		# print('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
-	# 		# exec("from du_files import "+du)
-	# 		# print("from du_files import "+du)
-	# 		# exec(du+".invoker=outgoing_invoke")# read file
-	# 		# print(du+".invoker=outgoing_invoke")# read file
-	# 		# print(du+" charged")
-
-	# # Deletes the previously imported DUs from the agent (if there was any)
-	# # def delete_imported_DUs_from_agent():
-	# # 	sys.path.append(fs_path)
-	# # 	'''for du in du_list:
-	# # 		exec ("from du_files import "+du)
-	# # 		exec(du+".invoker=outgoing_invoke")'''
-
-	# # 	du_files_path = fs_path + os.sep + "du_files"
-	# # 	UNIX_du_files_path = du_files_path.replace(os.sep, "/")
-	# # 	for du in du_list:
-	# # 		print(du)
-	# # 		du_i_file_path = du_files_path + os.sep + du+".py"
-	# # 		while not os.path.exists(du_i_file_path):
-	# # 			time.sleep(0.1)
-	# # 		##OJO CON ESTO QUE HAY QUE PROBARLO BIEN BIEN
-			
-	# # 		exec('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
-	# # 		exec("from du_files import "+du)
-	# # 		exec(du+".invoker=outgoing_invoke")# read file
-	# # 		print(du+" charged")
-
-	# # Do the necessary writes and reads
-	# print('agent_X_grant_file_path = ', agent_X_grant_file_path)
-	# print('agents_grant_file_path = ', agents_grant_file_path)
-	# print('cloudbookjson_file_path = ', cloudbookjson_file_path)
-	# write_agent_X_grant_file()
-	# while not os.path.exists(agents_grant_file_path) or not os.path.exists(cloudbookjson_file_path) or os.stat(cloudbookjson_file_path).st_size==0:
-	# 	print("Waiting for agents_grant.json and cloudbook.json")
-	# 	time.sleep(1)
-	# read_agents_grant_file()
-	# read_cloudbook_file()
-	# import_DUs_into_agent()
-
-	# grant = None
-	# while True:
-	# 	current_time = time.monotonic()
-
-	# 	# While there is data in the queue, analyze it
-	# 	while not grant_queue.empty():
-	# 		item = grant_queue.get()
-	# 		#print("Grant item retrieved from queue: ", item)
-	# 		try:
-	# 			item_grant = item['grant']
-	# 			if item_grant=='HIGH' or item_grant=='MEDIUM' or item_grant=='LOW':
-	# 				grant = item_grant
-	# 			else:
-	# 				print("ERROR: The grant obtained from the queue is not valid. Invalid value.")
-	# 		except:
-	# 			print("ERROR: There was a problem with the grant item obtained from the queue. Invalid key.")
-
-	# 	# When the the interval time expires
-	# 	if current_time-time_start >= agent_grant_interval:
-	# 		time_start += agent_grant_interval
-
-	# 		# Update dictionary with new data (grant)
-	# 		if grant!= None:
-	# 			grant_dictionary[my_agent_ID]["GRANT"] = grant
-	# 			#print('Grant dict updated')
-
-	# 		# Update also IP/port ??? --> call get_ip_info() again and update if necessary
-	# 		#grant_dictionary[my_agent_ID]["IP"] = ip
-	# 		#grant_dictionary[my_agent_ID]["PORT"] = port
-
-	# 		# Write dictionary in "agent_X_grant.json" and read dictionary from "agents_grant.json"
-	# 		write_agent_X_grant_file()
-	# 		read_agents_grant_file()
-	# 		grant = None
-
-	# 	# Wait 1 second to look for more data in the queue
-	# 	time.sleep(1)
+	if local_port:
+		return local_port
+	else:
+		raise Exception(GEN_ERR_INIT_CHECK_FLASK)
 
 
 # This function checks if the port passed as parameter is available or in use, trying to bind that port to a socket. Then, the socket is
 # closed and the result (true/false) is returned.
-def check_port_available(port):
-	sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+# def check_port_available(port):
+# 	sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+# 	available = False
+# 	try:
+# 		sock.bind(("0.0.0.0", port))
+# 		print("Port " + str(port) + " is available.")
+# 		available = True
+# 	except:
+# 		print("Port " + str(port) + " is in use.")
+# 	sock.close()
+# 	return available
+
+
+# This function finds the first port available strating from the port given as parameter onwards. Returns the port and the
+# socket which is blocking the port for other applications (close it before attempting to run any application in that port).
+def get_port_available(port):
 	available = False
-	try:
-		sock.bind(("0.0.0.0", port))
-		print("Port " + str(port) + " is available.")
-		available = True
-	except:
-		print("Port " + str(port) + " is in use.")
-	sock.close()
-	return available
+	sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+	while not available:
+		try:
+			sock.bind(("0.0.0.0", port))
+			print("Port " + str(port) + " is available.")
+			available = True
+		except:
+			print("Port " + str(port) + " is in use.")
+			sock.close()
+			sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+			port += 1
+	return (port, sock)
+
+
+# This function gets the local IP. In the case of multiple IPs, gets the default route.
+def get_local_ip():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # doesn't even have to be reachable
+        s.connect(('10.255.255.255', 1))
+        local_ip = s.getsockname()[0]
+    except:
+        local_ip = '127.0.0.1'
+    finally:
+        s.close()
+    return local_ip
+
+
+# This function gets the local IP if the lan_mode is set to True and the external IP and port if the lan_mode is set to False.
+# The function raises an exception if it could not retrieve the requested data.
+def get_port_and_ip(lan_mode=True):
+	ip, port = None, None
+
+	if lan_mode:
+		ip = get_local_ip()
+		if ip==None:
+			raise Exception(ERR_NO_LAN)
+	else:
+		(_, ip, port) = get_ip_info() 
+		if ip==None or port==None:
+			raise Exception(ERR_NO_INTERNET)
+	return (ip, port)
 
 
 
@@ -629,8 +746,8 @@ if __name__ == "__main__":
 
 	# Load agent config file
 	agent_id = sys.argv[1]
-	project_name = sys.argv[2]
-	project_path = cloudbook_path + os.sep + project_name
+	my_project_name = sys.argv[2]
+	project_path = cloudbook_path + os.sep + my_project_name
 	agent_config_dict = loader.load_dictionary(project_path + os.sep + "agents" + os.sep + "config_"+agent_id+".json")
 
 	my_agent_ID = agent_config_dict["AGENT_ID"]
@@ -644,59 +761,87 @@ if __name__ == "__main__":
 	agent_grant_interval = configjson_dict['AGENT_GRANT_INTERVAL']
 	lan_mode = configjson_dict['LAN']
 
-	# Check lan mode is on or off to use internal or external ips and ports respectively
-	if lan_mode:
-		# Check the first port available from 5000 (included) onwards
-		local_port = 5000
-		while not check_port_available(local_port):
-			local_port += 1
-		print("Lan mode ON: the first port available from 5000 onwards is ", local_port)
-	else:
-		local_port = 0
-		print("Lan mode OFF: using external ip and port.")
-
-	# LAUNCH THREADS
-	# Launch invoke listener thread
-	#Process(target=flaskThreaded, args=(local_port,)).start()
-	threading.Thread(target=flaskThreaded, args=[local_port]).start()
-	#flaskThreaded(local_port)
-
-	# Launch the stats file creator thread
-	threading.Thread(target=create_stats, args=(agent_stats_interval,)).start()
-
-	# Launch the grant file creator thread
-	#threading.Thread(target=create_grant, args=(agent_grant_interval,my_grant,local_port,fs_path,)).start()
-	##############################################################################################################
-	##############################################################################################################
-	##############################################################################################################
-	init_grant = my_grant
-	int_port = local_port
-	##########################################
-	print("Agent info (grant,ip,port) file creator thread starts execution.")
-	time_start = time.monotonic()
-
-	# Get IPs and ports and verify they are correct
-	(_, ext_ip, ext_port, int_ip) = get_ip_info(include_internal=True)
-	while ext_ip==None or ext_port==None or int_ip==None:
-		(_, ext_ip, ext_port, int_ip) = get_ip_info(include_internal=True)
-	print("ext_ip, ext_port, int_ip, int_port:", ext_ip, ext_port, int_ip, int_port)
-
-	# Create and fill dictionary with initial data
-	grant_dictionary = {}
-	grant_dictionary[my_agent_ID] = {}
-	grant_dictionary[my_agent_ID]["GRANT"] = init_grant
-	if int_port==0: 	# If no internal port is given, use externals
-		grant_dictionary[my_agent_ID]["IP"] = ext_ip
-		grant_dictionary[my_agent_ID]["PORT"] = ext_port
-	else: 				# Use internal IP and port
-		grant_dictionary[my_agent_ID]["IP"] = int_ip
-		grant_dictionary[my_agent_ID]["PORT"] = int_port
-
 	# Check if fs_path is not empty
 	if fs_path=='':
 		fs_path = poject_path + os.sep + "distributed"
 		print("Path to distributed filesystem was not set in the agent, default will be used: ", fs_path)
 
+	# Print settings
+	settings_string = "\n"
+	settings_string += "The agent has the following configuration:\n"
+	settings_string += "  - ID: " + my_agent_ID + "\n"
+	settings_string += "  - Project: " + my_project_name + "\n"
+	settings_string += "  - Grant: " + my_grant + "\n"
+	settings_string += "  - FSPath: " + fs_path + "\n"
+	settings_string += "  - Stats creation period: " + str(agent_stats_interval) + "\n"
+	settings_string += "  - Grant file creation period: " + str(agent_grant_interval) + "\n"
+	if lan_mode:
+		settings_string += "  - Lan mode: ON (using local ip and port)\n"
+	else:
+		settings_string += "  - Lan mode: OFF (using external ip and port)\n"
+	print(settings_string)
+	# print("The agent has the following configuration:\n")
+	# print("  - ID:", my_agent_ID)
+	# print("  - Project:", my_project_name)
+	# print("  - Grant:", my_grant)
+	# print("  - FSPath:", fs_path)
+	# print("  - Stats creation period:", agent_stats_interval)
+	# print("  - Grant file creation period:", agent_grant_interval)
+	# if lan_mode:
+	# 	print("  - Lan mode: ON (using local ip and port)")
+	# else:
+	# 	print("  - Lan mode: OFF (using external ip and port)")
+
+	# Input/output queues for process communication
+	mp_agent2flask_queue = Queue()
+	mp_flask2agent_queue = Queue()
+
+	# Launch the FlaskProcess
+	flask_proc = Process(target=flaskProcessFunction, args=(mp_agent2flask_queue, mp_flask2agent_queue))
+	flask_proc.start()
+
+	# Launch the stats file creator thread
+	threading.Thread(target=create_stats, args=(agent_stats_interval,)).start()
+
+	# Set up the logger
+	log = logging.getLogger('werkzeug')
+	log.setLevel(logging.ERROR)
+
+	# Try (up to 3 times) to get ip and port to share with the rest of cloudbook
+	retrys = 3
+	for i in range(retrys):
+		try:
+			(ip, port) = get_port_and_ip(lan_mode=lan_mode)
+			break
+		except Exception as e:
+			print(e)
+			if i!=retrys:
+				time.sleep(1)
+				print("Retrying...")
+			else:
+				raise e
+
+	# Number where the search for a free port will begin
+	start_port_search = 5000
+
+	# Does not need arguments because this is the global name space, and all these variables can be accessed as globals
+	local_port = init_flask_process_and_check_ok()
+
+	# Next time the function is called, it will try to start in the same port as before
+	start_port_search = local_port
+
+	# Update the port (from None to the local_port) in the case of a lan_mode is active
+	if lan_mode:
+		port = local_port
+
+	# Create and fill dictionary with initial data
+	grant_dictionary = {}
+	grant_dictionary[my_agent_ID] = {}
+	grant_dictionary[my_agent_ID]["GRANT"] = my_grant
+	grant_dictionary[my_agent_ID]["IP"] = ip
+	grant_dictionary[my_agent_ID]["PORT"] = port
+
+	# Build the paths to the different files
 	agent_X_grant_file_path = project_path + os.sep + "distributed" + os.sep + "agents_grant" + os.sep + my_agent_ID+"_grant.json"
 	agents_grant_file_path = project_path + os.sep + "distributed" + os.sep + "agents_grant.json"
 	cloudbookjson_file_path = fs_path + os.sep + "cloudbook.json"
@@ -717,74 +862,11 @@ if __name__ == "__main__":
 	# Internal function to load the "cloudbook.json" file created by the deployer
 	def read_cloudbook_file(dict_only=False):
 		global cloudbook_dict_agents
-		global all_dus
 		global du_list
 		cloudbook_dict_agents = loader.load_dictionary(cloudbookjson_file_path)
 		#print("cloudbook.json has been read.\n cloudbook_dict_agents = ", cloudbook_dict_agents)
 		if not dict_only:
 			du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
-
-			# Get all dus
-			all_dus = []
-			for i in cloudbook_dict_agents:
-				all_dus.append(i)
-
-	# # Internal function to import the DUs in the agent
-	# def import_DUs_into_agent():
-	# 	global du_list
-
-	# 	# Load the DUs that belong to this agent.
-	# 	du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
-	# 	print("My du_list: ", du_list)
-
-	# 	sys.path.append(fs_path)
-	# 	'''for du in du_list:
-	# 		exec ("from du_files import "+du)
-	# 		exec(du+".invoker=outgoing_invoke")'''
-
-	# 	du_files_path = fs_path + os.sep + "du_files"
-	# 	UNIX_du_files_path = du_files_path.replace(os.sep, "/")
-	# 	for du in du_list:
-	# 		print(du)
-	# 		du_i_file_path = du_files_path + os.sep + du+".py"
-	# 		while not os.path.exists(du_i_file_path):
-	# 			time.sleep(0.1)
-	# 		##OJO CON ESTO QUE HAY QUE PROBARLO BIEN BIEN
-	# 		exec('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
-	# 		# exec("from du_files import "+du)
-	# 		globals()[du] = __import__(du, fromlist=["du_files"])
-	# 		globals()[du+'.invoker'] = outgoing_invoke
-	# 		#exec(du+".invoker=outgoing_invoke")# read file
-	# 		print(du+" charged")
-			
-			# exec('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
-			# print('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
-			# exec("from du_files import "+du)
-			# print("from du_files import "+du)
-			# exec(du+".invoker=outgoing_invoke")# read file
-			# print(du+".invoker=outgoing_invoke")# read file
-			# print(du+" charged")
-
-	# Deletes the previously imported DUs from the agent (if there was any)
-	# def delete_imported_DUs_from_agent():
-	# 	sys.path.append(fs_path)
-	# 	'''for du in du_list:
-	# 		exec ("from du_files import "+du)
-	# 		exec(du+".invoker=outgoing_invoke")'''
-
-	# 	du_files_path = fs_path + os.sep + "du_files"
-	# 	UNIX_du_files_path = du_files_path.replace(os.sep, "/")
-	# 	for du in du_list:
-	# 		print(du)
-	# 		du_i_file_path = du_files_path + os.sep + du+".py"
-	# 		while not os.path.exists(du_i_file_path):
-	# 			time.sleep(0.1)
-	# 		##OJO CON ESTO QUE HAY QUE PROBARLO BIEN BIEN
-			
-	# 		exec('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
-	# 		exec("from du_files import "+du)
-	# 		exec(du+".invoker=outgoing_invoke")# read file
-	# 		print(du+" charged")
 
 	# Internal funciton to check if there are any redeployment files
 	def find_redeploy_files():
@@ -798,23 +880,14 @@ if __name__ == "__main__":
 			cold_redeploy = True
 		return (hot_redeploy, cold_redeploy)
 
-	# # Internal funciton to check if there are any redeployment files
-	# def find_redeploy_files():
-	# 	hot_redeploy = False
-	# 	cold_redeploy = False
-	# 	if os.path.exists(hot_redeploy_file_path):
-	# 		print(my_agent_ID, ": HOT_REDEPLOY file found.")
-	# 		hot_redeploy = True
-
-
-	# Load the DUs that belong to this agent.
+	# Get the cloudbook and the agents_grant (DUs and IP/port of each agent).
 	while not du_list:
 		try:
 			write_agent_X_grant_file()
 			while not os.path.exists(agents_grant_file_path) or not os.path.exists(cloudbookjson_file_path) or os.stat(cloudbookjson_file_path).st_size==0:
 				print("Waiting for agents_grant.json and cloudbook.json")
 				if not os.path.exists(agent_X_grant_file_path):
-					print("My grant file was deleted! Creating again...")
+					print("My grant file was deleted! Creating it again...")
 					write_agent_X_grant_file()
 				time.sleep(1)
 			read_agents_grant_file()
@@ -823,35 +896,32 @@ if __name__ == "__main__":
 		except:
 			print(ERR_READ_WRITE)
 			time.sleep(1)
+			print("Retrying...")
 
 	print("My du_list: ", du_list)
 
-	sys.path.append(fs_path)
-	'''for du in du_list:
-		exec ("from du_files import "+du)
-		exec(du+".invoker=outgoing_invoke")'''
+	# Pass the after_launch_info to the FlaskProcess
+	# {"after_launch_info": {"du_list": du_list, "cloudbook_dict_agents": cloudbook_dict_agents, "agents_grant": agents_grant}}
+	after_launch_info_item = {}
+	after_launch_info_item["after_launch_info"] = {}
+	after_launch_info_item["after_launch_info"]["du_list"] = du_list
+	after_launch_info_item["after_launch_info"]["cloudbook_dict_agents"] = cloudbook_dict_agents
+	after_launch_info_item["after_launch_info"]["agents_grant"] = agents_grant
+	mp_agent2flask_queue.put(after_launch_info_item)
 
-	du_files_path = fs_path + os.sep + "du_files"
-	UNIX_du_files_path = du_files_path.replace(os.sep, "/")
-	for du in du_list:
-		print(du)
-		du_i_file_path = du_files_path + os.sep + du+".py"
-		while not os.path.exists(du_i_file_path):
-			time.sleep(0.1)
-		##OJO CON ESTO QUE HAY QUE PROBARLO BIEN BIEN
-		#exec('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
-		exec("from du_files import "+du)
-		# globals()[du] = __import__(du, fromlist=["du_files"])
-		# globals()[du+'invoker'] = outgoing_invoke
-		exec(du+".invoker=outgoing_invoke")# read file
-		print(du+" charged")
-	
-	dus_loaded = True
-	cloudbook_version += 1
-
+	# Forever loop (check grant modifications, write grant_XX_file, check and handle redeploy requests)
+	time_start = time.monotonic()
 	grant = None
 	while True:
 		current_time = time.monotonic()
+
+		# # While there is data in the queue, analyze it
+		# while not mp_flask2agent_queue.empty():
+		# 	item = mp_flask2agent_queue.get()
+		# 	if "restart_flask_proc" in item:
+		# 		flask_proc.terminate()
+		# 	else:
+		# 		pass
 
 		# While there is data in the queue, analyze it
 		while not grant_queue.empty():
@@ -881,89 +951,32 @@ if __name__ == "__main__":
 
 			# Write dictionary in "agent_X_grant.json" and read dictionary from "agents_grant.json"
 			write_agent_X_grant_file()
+
+			# Check if there are redeployment files
 			(hot_redeploy, cold_redeploy) = find_redeploy_files()
 			if hot_redeploy:
 				read_agents_grant_file()
 				read_cloudbook_file(dict_only=True)
-				cloudbook_version += 1
+				# Pass the init_info to the FlaskProcess
+				# {"hot_redeploy": {"cloudbook_dict_agents": cloudbook_dict_agents, "agents_grant": agents_grant}}
+				hot_redeploy_item = {}
+				hot_redeploy_item["hot_redeploy"] = {}
+				hot_redeploy_item["hot_redeploy"]["cloudbook_dict_agents"] = cloudbook_dict_agents
+				hot_redeploy_item["hot_redeploy"]["agents_grant"] = agents_grant
+				mp_agent2flask_queue.put(hot_redeploy_item)
+				
 				# ! - IMPROVEMENT: Check if the agent only has loaded the du_default and load more in hot redeploy???
 			if cold_redeploy:
-				dus_loaded = False
-				# Cleaning of loaded DUs
-				for du in du_list:
-					print(my_agent_ID + ": deleting " + du)
-					exec("del " + du)
-
-				read_agents_grant_file()
-				read_cloudbook_file()
-					
-				for du in du_list:
-					print(du)
-					du_i_file_path = du_files_path + os.sep + du+".py"
-					while not os.path.exists(du_i_file_path):
-						time.sleep(0.1)
-					exec("from du_files import "+du)
-					exec(du+".invoker=outgoing_invoke")# read file
-					print(du+" charged")
-				dus_loaded = True
-				cloudbook_version += 1
-				print("My du_list: ", du_list)
+				flask_proc.terminate()
+				local_port = init_flask_process_and_check_ok()
+				start_port_search = local_port
+				if lan_mode:
+					port = local_port
+				grant_dictionary[my_agent_ID]["PORT"] = port
 
 			grant = None
 
 		# Wait 1 second to look for more data in the queue
 		time.sleep(1)
-
-	##############################################################################################################
-	##############################################################################################################
-	##############################################################################################################
-
-
-	# # LOAD DEPLOYABLE UNITS
-	# print("Loading deployable units for agent " + my_agent_ID + "...")
-	# #cloudbook_dict_agents = loader.load_cloudbook_agents()
-
-	# # It will only contain info about agent_id : du_assigned (not IP)
-	# # Output file from DEPLOYER
-	# # It is necessary to wait until cloudbook.json exists
-	# cloudbookjson_file_path = fs_path + os.sep + "cloudbook.json"
-	# while not os.path.exists(cloudbookjson_file_path):
-	# 	time.sleep(0.1)
-	# while(os.stat(cloudbookjson_file_path).st_size==0):
-	# 	continue
-
-	# # Check file format
-	# cloudbook_dict_agents = loader.load_cloudbook(cloudbookjson_file_path)
-	
-	# # Load the DUs that belong to this agent.
-	# du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
-	# print("My du_list: ", du_list)
-
-	# # Get all dus
-	# for i in cloudbook_dict_agents:
-	# 	all_dus.append(i)
-
-	# sys.path.append(fs_path)
-	# '''for du in du_list:
-	# 	exec ("from du_files import "+du)
-	# 	exec(du+".invoker=outgoing_invoke")'''
-
-	# du_files_path = fs_path + os.sep + "du_files"
-	# UNIX_du_files_path = du_files_path.replace(os.sep, "/")
-	# for du in du_list:
-	# 	print(du)
-	# 	du_i_file_path = du_files_path + os.sep + du+".py"
-	# 	while not os.path.exists(du_i_file_path):
-	# 		time.sleep(0.1)
-	# 	##OJO CON ESTO QUE HAY QUE PROBARLO BIEN BIEN
-		
-	# 	exec('sys.path.append('+"'"+UNIX_du_files_path+"'"+')')
-	# 	exec ("from du_files import "+du)
-	# 	exec(du+".invoker=outgoing_invoke")# read file
-	# 	print(du+" charged")
-
-	# Set up the logger
-	log = logging.getLogger('werkzeug')
-	log.setLevel(logging.ERROR)
 
 	print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")

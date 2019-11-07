@@ -39,7 +39,7 @@ def get_info():
 
 	# List with the folders inside "cloudbook/" folder. Each one represents a different project
 	projects_list = next(os.walk(cloudbook_path))[1]
-	print("projects_list:", projects_list)
+	#print("projects_list:", projects_list)
 
 	# Clean the possible processes running in projects deleted
 	deletable_projects = []
@@ -74,7 +74,7 @@ def get_info():
 		for file in files:
 			projects[proj]['agents_info'][files.index(file)] = loader.load_dictionary(agents_path + os.sep + file)
 
-	print("PROJECTS:\n", projects)
+	#print("PROJECTS:\n", projects)
 
 
 def on_closing():
@@ -93,8 +93,10 @@ def on_closing():
 
 def kill_process(proc):
 	if(platform.system()=="Windows"):
-		proc.send_signal(signal.CTRL_BREAK_EVENT)
-		proc.kill()
+		# proc.send_signal(signal.CTRL_BREAK_EVENT)
+		# proc.kill()
+		kill_tree_command = "TASKKILL /F /T /PID "+str(proc.pid)
+		os.system(kill_tree_command)	
 	else:
 		os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
 
@@ -180,7 +182,7 @@ class GeneralInfoTab (ttk.Frame):
 			proc = subprocess.Popen("python3 agent.py "+ agent_id + " " + self.project_name, shell=True, preexec_fn=os.setsid)
 		projects[self.project_name]["agent_pid_dict"][agent_id] = proc
 		print("Active processes: ", projects[self.project_name]["agent_pid_dict"], "\n")
-		time.sleep(2)
+		#time.sleep(2)
 		app.refresh()
 		
 	# Functionality of the "Stop" button.
@@ -226,7 +228,7 @@ class AddAgentTab(ttk.Frame):
 		self.project_name = project_name
 
 		self.label_welcome = ttk.Label(self)
-		self.label_welcome["text"] = ("Create a new agent and attachs to local default circle \'LOCAL\'. \n All you need is to write up the circle ID you want to create or attach to.")
+		self.label_welcome["text"] = "This tab allows you to create agents.\nNote: if the id=0 checkbox is selected it and agent_0 already exists it will be replaced with the new one."
 		self.label_welcome.grid(column=0, row=1, columnspan=3)
 		
 		# self.circle_label = ttk.Label(self)
@@ -275,9 +277,12 @@ class AddAgentTab(ttk.Frame):
 	# Functionality for create button. Recovers the already set information and calls the create_agent function from agent.py
 	def create(self):
 		grant = self.switch(self.grant_combo.current())
-		print("Grant selected: : ", grant)
+		print("Grant selected:", grant)
 		fspath = self.fspath.get()
-		print("Path to distributed filesystem: ", fspath)
+		if fspath != "":
+			print("Path to distributed filesystem:", fspath)
+		else:
+			print("Default path to distributed filesystem.")
 		if self.is_agent_0.get():
 			print("Creating agent with id=0.")
 		agent.create_agent(grant=grant, project_name=self.project_name, fs=fspath, agent_0=self.is_agent_0.get())

@@ -76,19 +76,29 @@ def get_info():
 
 	#print("PROJECTS:\n", projects)
 
+def sigint_handler(*args):
+	print("\n\nAll running agents on any project (if any) will be stopped...")
+	kill_all_processes()
+	print("\nExiting program...\n")
+	os._exit(0)
 
 def on_closing():
 	if tk.messagebox.askokcancel("Quit", "Are you sure to close the program?\nAny running agent will be stopped."):
 		# Clean the possible processes running before exiting the program
-		print("\n\nAll running agents on any project (if any) will be stopped...")
-		for proj in projects:
-			for active_agent in projects[proj]["agent_pid_dict"].keys():
-				active_proc = projects[proj]["agent_pid_dict"][active_agent]
-				print("Killing process:", active_proc)
-				kill_process(active_proc)
-		print("\nExiting program...\n")
-		os._exit(0)
+		sigint_handler()
+		# print("\n\nAll running agents on any project (if any) will be stopped...")
+		# kill_all_processes()
+		# print("\nExiting program...\n")
+		# os._exit(0)
 	print("Program not exited. Everything is kept the same.\n")
+
+def kill_all_processes():
+	for proj in projects:
+		for active_agent in projects[proj]["agent_pid_dict"].keys():
+			active_proc = projects[proj]["agent_pid_dict"][active_agent]
+			print("Killing process:", active_proc)
+			kill_process(active_proc)
+		projects[proj]["agent_pid_dict"] = {}
 
 
 def kill_process(proc):
@@ -99,6 +109,7 @@ def kill_process(proc):
 		os.system(kill_tree_command)	
 	else:
 		os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+
 
 
 #####   GUI CLASSES   #####
@@ -408,7 +419,8 @@ class Application(ttk.Frame):
 		master.title("CloudBook Agent GUI")
 
 		self.notebook = ttk.Notebook(self)
-		tk.Button(self, text="Refresh", command=self.refresh).pack()
+		tk.Button(self, text="Refresh", command=self.refresh).pack(side=tk.TOP)
+		tk.Button(self, text="Stop all agents", command=self.stop_all_agents).pack(side=tk.BOTTOM)
 
 		self.refresh()
 	
@@ -437,6 +449,10 @@ class Application(ttk.Frame):
 		self.notebook.pack(expand=True, fill="both")
 		self.pack(expand=True, fill="both")
 
+	#Functionality for Stop all processes button.
+	def stop_all_agents(self):
+		kill_all_processes()
+		self.refresh()
 
 
 #####   GUI MAIN   #####
@@ -444,8 +460,12 @@ class Application(ttk.Frame):
 # Start application
 #get_info()
 master = tk.Tk()
+icon = PhotoImage(file='cloudbook_icon.gif')
+master.tk.call('wm', 'iconphoto', master._w, icon)
+
 app = Application(master)
 master.protocol("WM_DELETE_WINDOW", on_closing)
+signal.signal(signal.SIGINT, sigint_handler)
 
 # Run the application forever (until closed)
 app.mainloop()

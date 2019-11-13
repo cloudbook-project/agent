@@ -130,6 +130,14 @@ def get_agent_id():
 	print("/get_agent_id route has been invoked.")
 	return my_agent_ID
 
+# @application.route('/quit')
+# def flask_quit():
+# 	func = request.environ.get('werkzeug.server.shutdown')
+# 	print(request.environ)
+# 	func()
+# 	print("/quit route has been invoked.")
+# 	return "Quitting..."
+
 @application.route("/invoke", methods=['GET','POST'])
 def invoke(configuration = None):
 	'''
@@ -402,11 +410,18 @@ def edit_agent(agent_id, project_name, new_grant='', new_fs=''):
 
 
 # This function launches the flask server in the port given as parameter.
-def flaskThreaded(port, sock):
+def flaskThreaded(port, sock=None):
 	port = int(port)
-	print("Launched in port:", port)
-	sock.close()
+	print("Launching in port:", port)
+	if sock:
+		sock.close()
 	application.run(debug=False, host="0.0.0.0", port=port, threaded=True)
+	# import psutil
+	# num_cores = psutil.cpu_count()
+	# print("The number of cores of the machine is:", num_cores)
+	# application.run(debug=False, host="0.0.0.0", port=port, threaded=False, processes=num_cores)
+	# global first_launch
+	# first_launch = False
 	print("00000000000000000000000000000000000000000000000000000000000000000000000000")
 
 # This function is used in a new process and coordinates the queues for loading data and the DUs to allow Flask execution.
@@ -457,6 +472,9 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue):
 	# global agents_grant
 	# global cloudbook_version
 
+	# local_port = None
+	# global first_launch
+	# first_launch = True
 	while True:
 		while not mp_agent2flask_queue.empty():
 			item = mp_agent2flask_queue.get()
@@ -480,13 +498,27 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue):
 					print(ERR_QUEUE_KEY_VALUE)
 					raise e
 				try:
-					if launch and not flask_thread:
+					if launch:# and not flask_thread:
 						(local_port, sock) = get_port_available(port=start_port_search)
 
 						print("Trying to start Flask on port", local_port)
 						flask_thread = threading.Thread(target=flaskThreaded, args=[local_port, sock])
 						flask_thread.setDaemon(True)
 						flask_thread.start()
+
+						# if not first_launch:
+						# 	print("Trying to start Flask AGAIN on port", local_port)
+						# 	flask_thread = threading.Thread(target=flaskThreaded, args=[local_port])
+						# 	flask_thread.setDaemon(True)
+						# 	flask_thread.start()
+
+						# else:
+						# 	(local_port, sock) = get_port_available(port=start_port_search)
+
+						# 	print("Trying to start Flask on port", local_port)
+						# 	flask_thread = threading.Thread(target=flaskThreaded, args=[local_port, sock])
+						# 	flask_thread.setDaemon(True)
+						# 	flask_thread.start()
 
 						retrieved_id = None
 						while not retrieved_id:
@@ -495,6 +527,7 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue):
 								retrieved_id = retrieved_data.read().decode('UTF-8')
 							except Exception as e:
 								print(ERR_GET_ID_REFUSED)
+								time.sleep(0.5)
 								print("Retrying...")
 						
 						mp_queue_data = {}

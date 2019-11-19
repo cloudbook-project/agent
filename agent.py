@@ -51,7 +51,7 @@ else:
 # Path to the project the agent belongs to
 project_path = None
 
-#Path to the distributed filesystem
+# Path to the distributed filesystem
 fs_path = None
 
 # Variable that contains the information from agents_grant.json (last read)
@@ -91,12 +91,12 @@ did not accept the request."
 GEN_ERR_RESTARTING_FLASK = "GENERIC ERROR: something went wrong when restarting the flask process."
 GEN_ERR_INIT_CHECK_FLASK = "GENERIC ERROR: something whent wrong when initializing of checking that FlaskProcess was up and \
 running correctly."
-ERR_GET_ID_REFUSED = "ERROR: conection refused when FlaskProcess was trying to check the id of the agent running on the \
+ERR_GET_PROJ_ID_REFUSED = "ERROR: conection refused when FlaskProcess was trying to check the id of the agent running on the \
 requested port."
 
 
 
-#####   OVERLOAD BUILT-IN FUNCITONS   #####
+#####   OVERLOAD BUILT-IN FUNCTIONS   #####
 
 # Print function overloaded in order to make it print the id before anything and keep track of the traces of each agent easier.
 def print(*args, **kwargs):
@@ -125,10 +125,10 @@ def hello():
 	print("Hello world")
 	return "Hello"
 
-@application.route("/get_agent_id", methods=['GET', 'PUT', 'POST'])
-def get_agent_id():
-	print("/get_agent_id route has been invoked.")
-	return my_agent_ID
+@application.route("/get_project_agent_id", methods=['GET', 'PUT', 'POST'])
+def get_project_agent_id():
+	print("/get_project_agent_id route has been invoked.")
+	return my_project_name + " - " + my_agent_ID
 
 # @application.route('/quit')
 # def flask_quit():
@@ -224,11 +224,15 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 
 	# Internal function to write alarms (files). Parameter is the importance level (the alarm file name)
 	def write_alarm(alarm_name):
-		possible_alarms = ["CRITICAL", "WARNING"]
-		assert alarm_name in possible_alarms
-		alarm_file_path = fs_path + os.sep + alarm_name
-		open(alarm_file_path, 'a').close() 	# Create an alarm file if it does not exist
-		print(alarm_name, " alarm file has been created.")
+		(hot_redeploy, cold_redeploy) = check_redeploy_files()
+		if not hot_redeploy and not cold_redeploy: 	# Only do something if there are no redeployment files
+			possible_alarms = ["CRITICAL", "WARNING"]
+			assert alarm_name in possible_alarms
+			alarm_file_path = fs_path + os.sep + alarm_name
+			open(alarm_file_path, 'a').close() 	# Create an alarm file if it does not exist
+			print(alarm_name, " alarm file has been created.")
+		else:
+			print("Alarm not created due to the existence redeployment files.")
 
 
 	print("=====AGENT: /REMOTE_INVOKE=====")
@@ -304,10 +308,7 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 
 			if remote_agent == last_agent: 	# If all agents have been tested
 				print("No agents available to execute the requested function.")
-				critical_dus_file_path = fs_path + os.sep + "critical_dus.json"
-				critical_dus_dict = loader.load_dictionary(critical_dus_file_path)
-				critical_dus = critical_dus_dict["critical_dus"]
-				if remote_du in critical_dus: 	# If the du is critical
+				if is_critical(remote_du): 	# If the du is critical
 					print("The function that could not be invoked is in a critical du: ", remote_du + "." + invoked_function)
 					write_alarm("CRITICAL")
 					while True:
@@ -494,51 +495,38 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue):
 			elif "launch" in item:
 				try:
 					launch = item["launch"]
+					cold_redeploy = item["launch"]["cold_redeploy"]
 				except Exception as e:
 					print(ERR_QUEUE_KEY_VALUE)
 					raise e
 				try:
-					if launch:# and not flask_thread:
+					if not cold_redeploy:
 						(local_port, sock) = get_port_available(port=start_port_search)
+						flask_thread = threading.Thread(target=flaskThreaded, args=[local_port, sock], daemon=True)
+					else:
+						local_port = start_port_search
+						flask_thread = threading.Thread(target=flaskThreaded, args=[local_port], daemon=True)
+					flask_thread.start()
 
-						print("Trying to start Flask on port", local_port)
-						flask_thread = threading.Thread(target=flaskThreaded, args=[local_port, sock])
-						flask_thread.setDaemon(True)
-						flask_thread.start()
-
-						# if not first_launch:
-						# 	print("Trying to start Flask AGAIN on port", local_port)
-						# 	flask_thread = threading.Thread(target=flaskThreaded, args=[local_port])
-						# 	flask_thread.setDaemon(True)
-						# 	flask_thread.start()
-
-						# else:
-						# 	(local_port, sock) = get_port_available(port=start_port_search)
-
-						# 	print("Trying to start Flask on port", local_port)
-						# 	flask_thread = threading.Thread(target=flaskThreaded, args=[local_port, sock])
-						# 	flask_thread.setDaemon(True)
-						# 	flask_thread.start()
-
-						retrieved_id = None
-						while not retrieved_id:
-							try:
-								retrieved_data = urllib.request.urlopen("http://localhost:"+str(local_port)+"/get_agent_id")
-								retrieved_id = retrieved_data.read().decode('UTF-8')
-							except Exception as e:
-								print(ERR_GET_ID_REFUSED)
-								time.sleep(0.5)
-								print("Retrying...")
-						
-						mp_queue_data = {}
-						if my_agent_ID == retrieved_id:
-							mp_queue_data["flask_proc_ok"] = {}
-							mp_queue_data["flask_proc_ok"]["port"] = local_port
-						else:
-							print(ERR_FLASK_PORT_IN_USE) # This is the 2nd flask in the same port (race conditions)
-							print("The flask process will be restarted automatically.")
-							mp_queue_data["restart_flask_proc"] = ERR_FLASK_PORT_IN_USE
-						mp_flask2agent_queue.put(mp_queue_data)
+					retrieved_project_id = None
+					while not retrieved_project_id:
+						try:
+							retrieved_data = urllib.request.urlopen("http://localhost:"+str(local_port)+"/get_project_agent_id")
+							retrieved_project_id = retrieved_data.read().decode('UTF-8')
+						except Exception as e:
+							print(ERR_GET_PROJ_ID_REFUSED)
+							time.sleep(0.5)
+							print("Retrying...")
+					
+					mp_queue_data = {}
+					if my_project_name + " - " + my_agent_ID == retrieved_project_id:
+						mp_queue_data["flask_proc_ok"] = {}
+						mp_queue_data["flask_proc_ok"]["port"] = local_port
+					else:
+						print(ERR_FLASK_PORT_IN_USE) # This is the 2nd flask in the same port (race conditions)
+						print("The flask process will be restarted automatically.")
+						mp_queue_data["restart_flask_proc"] = ERR_FLASK_PORT_IN_USE
+					mp_flask2agent_queue.put(mp_queue_data)
 				except Exception as e:
 					print(GEN_ERR_LAUNCHING_FLASK)
 					raise e
@@ -636,7 +624,7 @@ def create_stats(t1):
 # This function passes the initial data to the FlaskProcess through the mp_queue, tells it to launch the FlaskThread and checks
 # if it has worked correctly with no port collisions. If everything is ok, retrives the used local_port. If there is a problem
 # (a port collision), restarts the FlaskProcess.
-def init_flask_process_and_check_ok():
+def init_flask_process_and_check_ok(cold_redeploy):
 	global my_agent_ID, my_project_name, fs_path, start_port_search, mp_flask2agent_queue, mp_agent2flask_queue, flask_proc
 	# Pass the init_info to the FlaskProcess
 	# {"init_info": {"my_agent_ID": my_agent_ID, "my_project_name": my_project_name, "fs_path": fs_path, 
@@ -652,8 +640,15 @@ def init_flask_process_and_check_ok():
 	# Tell the FlaskProcess to launch the FlaskThread
 	# {"launch": True}
 	launch_item = {}
-	launch_item["launch"] = True
+	launch_item["launch"] = {}
+	launch_item["launch"]["cold_redeploy"] = cold_redeploy
 	mp_agent2flask_queue.put(launch_item)
+
+	# If cold_redeploy, create virtual restart request from the flask proecess
+	if cold_redeploy:
+		mp_queue_data = {}
+		mp_queue_data["restart_flask_proc"] = "Requested restart from deployer (cold redeploy)."
+		mp_flask2agent_queue.put(mp_queue_data)
 
 	# Check the FlaskProcess launched the FlaskThread correctly and there are no collisions on ports (and retrieve local_port).
 	# If there is a port collision, restart the FlaskProcess
@@ -704,6 +699,8 @@ def init_flask_process_and_check_ok():
 		time.sleep(1)
 
 	if local_port:
+		# Next time the function is called, it will try to start in the same port as before
+		start_port_search = local_port
 		return local_port
 	else:
 		raise Exception(GEN_ERR_INIT_CHECK_FLASK)
@@ -770,6 +767,29 @@ def get_port_and_ip(lan_mode=True):
 		if ip==None or port==None:
 			raise Exception(ERR_NO_INTERNET)
 	return (ip, port)
+
+
+# This function to check if there are any redeployment files
+def check_redeploy_files():
+	hot_redeploy_file_path = fs_path + os.sep + "HOT_REDEPLOY"
+	cold_redeploy_file_path = fs_path + os.sep + "COLD_REDEPLOY"
+	hot_redeploy = False
+	cold_redeploy = False
+	if os.path.exists(hot_redeploy_file_path):
+		#print("HOT_REDEPLOY file found.")
+		hot_redeploy = True
+	if os.path.exists(cold_redeploy_file_path):
+		#print("COLD_REDEPLOY file found.")
+		cold_redeploy = True
+	return (hot_redeploy, cold_redeploy)
+
+
+# This function check if a du is critical
+def is_critical(du):
+	critical_dus_file_path = fs_path + os.sep + "critical_dus.json"
+	critical_dus_dict = loader.load_dictionary(critical_dus_file_path)
+	critical_dus = critical_dus_dict["critical_dus"]
+	return du in critical_dus
 
 
 
@@ -858,10 +878,7 @@ if __name__ == "__main__":
 	start_port_search = 5000
 
 	# Does not need arguments because this is the global name space, and all these variables can be accessed as globals
-	local_port = init_flask_process_and_check_ok()
-
-	# Next time the function is called, it will try to start in the same port as before
-	start_port_search = local_port
+	local_port = init_flask_process_and_check_ok(cold_redeploy=False)
 
 	# Update the port (from None to the local_port) in the case of a lan_mode is active
 	if lan_mode:
@@ -878,8 +895,6 @@ if __name__ == "__main__":
 	agent_X_grant_file_path = project_path + os.sep + "distributed" + os.sep + "agents_grant" + os.sep + my_agent_ID+"_grant.json"
 	agents_grant_file_path = project_path + os.sep + "distributed" + os.sep + "agents_grant.json"
 	cloudbookjson_file_path = fs_path + os.sep + "cloudbook.json"
-	hot_redeploy_file_path = fs_path + os.sep + "HOT_REDEPLOY"
-	cold_redeploy_file_path = fs_path + os.sep + "COLD_REDEPLOY"
 
 	# Internal function to write the "agent_X_grant.json" file consumed by the deployer
 	def write_agent_X_grant_file():
@@ -901,18 +916,6 @@ if __name__ == "__main__":
 		if not dict_only:
 			du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
 
-	# Internal funciton to check if there are any redeployment files
-	def find_redeploy_files():
-		hot_redeploy = False
-		cold_redeploy = False
-		if os.path.exists(hot_redeploy_file_path):
-			print("HOT_REDEPLOY file found.")
-			hot_redeploy = True
-		if os.path.exists(cold_redeploy_file_path):
-			print("COLD_REDEPLOY file found.")
-			cold_redeploy = True
-		return (hot_redeploy, cold_redeploy)
-
 	# Get the cloudbook and the agents_grant (DUs and IP/port of each agent).
 	while not du_list:
 		try:
@@ -925,7 +928,6 @@ if __name__ == "__main__":
 				time.sleep(1)
 			read_agents_grant_file()
 			read_cloudbook_file()
-			time.sleep(1)
 		except:
 			print(ERR_READ_WRITE)
 			time.sleep(1)
@@ -973,21 +975,10 @@ if __name__ == "__main__":
 		if current_time-time_start >= agent_grant_interval:
 			time_start += agent_grant_interval
 
-			# Update dictionary with new data (grant)
-			if grant!= None:
-				grant_dictionary[my_agent_ID]["GRANT"] = grant
-				#print('Grant dict updated')
-
-			# Update also IP/port ??? --> call get_ip_info() again and update if necessary
-			#grant_dictionary[my_agent_ID]["IP"] = ip
-			#grant_dictionary[my_agent_ID]["PORT"] = port
-
-			# Write dictionary in "agent_X_grant.json" and read dictionary from "agents_grant.json"
-			write_agent_X_grant_file()
-
 			# Check if there are redeployment files
-			(hot_redeploy, cold_redeploy) = find_redeploy_files()
+			(hot_redeploy, cold_redeploy) = check_redeploy_files()
 			if hot_redeploy:
+				print("Executing HOT_REDEPLOY...")
 				read_agents_grant_file()
 				read_cloudbook_file(dict_only=True)
 				# Pass the init_info to the FlaskProcess
@@ -1000,13 +991,40 @@ if __name__ == "__main__":
 				
 				# ! - IMPROVEMENT: Check if the agent only has loaded the du_default and load more in hot redeploy???
 			if cold_redeploy:
+				print("Executing COLD_REDEPLOY...")
 				flask_proc.terminate()
-				local_port = init_flask_process_and_check_ok()
-				start_port_search = local_port
+				local_port = init_flask_process_and_check_ok(cold_redeploy=True)
+
+				# Update the port (from None to the local_port) in the case of a lan_mode is active
 				if lan_mode:
 					port = local_port
 				grant_dictionary[my_agent_ID]["PORT"] = port
 
+				# It is supposed that agents_grant.json and cloudbook.json already exists
+				read_agents_grant_file()
+				read_cloudbook_file()
+
+				print("My new du_list: ", du_list)
+
+				# Pass the after_launch_info to the FlaskProcess
+				# {"after_launch_info": {"du_list": du_list, "cloudbook_dict_agents": cloudbook_dict_agents, "agents_grant": agents_grant}}
+				after_launch_info_item = {}
+				after_launch_info_item["after_launch_info"] = {}
+				after_launch_info_item["after_launch_info"]["du_list"] = du_list
+				after_launch_info_item["after_launch_info"]["cloudbook_dict_agents"] = cloudbook_dict_agents
+				after_launch_info_item["after_launch_info"]["agents_grant"] = agents_grant
+				mp_agent2flask_queue.put(after_launch_info_item)
+
+			# Update dictionary with new data (grant)
+			if grant!= None:
+				grant_dictionary[my_agent_ID]["GRANT"] = grant
+
+			# Update also IP/port ??? --> call get_ip_info() again and update if necessary
+			#grant_dictionary[my_agent_ID]["IP"] = ip
+			#grant_dictionary[my_agent_ID]["PORT"] = port
+
+			# Write dictionary in "agent_X_grant.json" and read dictionary from "agents_grant.json"
+			write_agent_X_grant_file()
 			grant = None
 
 		# Wait 1 second to look for more data in the queue

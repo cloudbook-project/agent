@@ -414,9 +414,9 @@ class ProjectTab(ttk.Frame):
 # Inside this object, the different tabs are constructed. It also includes a "Refresh" button.
 class Application(ttk.Frame):
 
-	def __init__(self, master):
-		super().__init__(master)
-		master.title("CloudBook Agent GUI")
+	def __init__(self, root):
+		super().__init__(root)
+		root.title("CloudBook Agent GUI")
 
 		self.notebook = ttk.Notebook(self)
 		tk.Button(self, text="Refresh", command=self.refresh).pack(side=tk.TOP)
@@ -456,16 +456,24 @@ class Application(ttk.Frame):
 
 
 #####   GUI MAIN   #####
+if __name__ == '__main__':
+	# If the system is Windows, set ID (arbitrary) to use icon also in the taskbar
+	if(platform.system()=="Windows"):
+		import ctypes
+		ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('Cloudbook_GUI')
 
-# Start application
-#get_info()
-master = tk.Tk()
-icon = PhotoImage(file='cloudbook_icon.gif')
-master.tk.call('wm', 'iconphoto', master._w, icon)
+	# Create tkinter and application
+	root = tk.Tk()
+	app = Application(root)
 
-app = Application(master)
-master.protocol("WM_DELETE_WINDOW", on_closing)
-signal.signal(signal.SIGINT, sigint_handler)
+	# Set the icons to use
+	icon_16x16 = PhotoImage(file='cloudbook_icon_16x16.gif')
+	icon_full = PhotoImage(file='cloudbook_icon_full.gif')
+	root.tk.call('wm', 'iconphoto', root._w, icon_full, icon_16x16)
 
-# Run the application forever (until closed)
-app.mainloop()
+	# Set handlers for Ctrl+C and closing operations
+	root.protocol("WM_DELETE_WINDOW", on_closing)
+	signal.signal(signal.SIGINT, sigint_handler)
+
+	# Run the application forever (until closed)
+	app.mainloop()

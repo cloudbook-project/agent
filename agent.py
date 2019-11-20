@@ -426,25 +426,30 @@ def flaskThreaded(port, sock=None):
 	print("00000000000000000000000000000000000000000000000000000000000000000000000000")
 
 # This function is used in a new process and coordinates the queues for loading data and the DUs to allow Flask execution.
-# El proceso FlaskProcess:
-# 	Espera para siempre mirando mp_agent2flask_queue cada 1s:
-# 		Si hay init_info: {"init_info": {"my_agent_ID": my_agent_ID, "my_project_name": my_project_name, "fs_path": fs_path,
-#										"start_port_search": start_port_search}}
-# 			Carga la info
-# 			Crea project_path
-# 		Si hay launch: {"launch": True}
-# 			Lanza el FlaskThread (en el que se lanza la app que queda corriendo automaticamente para atender los invokes)
-# 			Se compara el id del agente con el que devuelve flask en el puerto  en el que se ha intentado lanzar:
-# 				Si es igual: se manda por mp_flask2agent_queue el dato {"flask_proc_ok":{"port": local_port}}
-# 				Si es distinto: se manda por mp_flask2agent_queue el dato {"restart_flask_proc": ERR_FLASK_PORT_IN_USE}
-# 		Si hay after_launch_info: {"after_launch_info": {"du_list": du_list, "cloudbook_dict_agents": cloudbook_dict_agents,
-#														"agents_grant": agents_grant}}
-# 			Recarga diccionarios
-# 			Incializa cloudbook_version a 1
-# 			Carga du_list
-# 		Si hay hot_redeploy: {"hot_redeploy": {"cloudbook_dict_agents": cloudbook_dict_agents, "agents_grant": agents_grant}}
-# 			Recarga diccionarios
-# 			Aumenta cloudbook_version
+# Espera para siempre mirando mp_agent2flask_queue cada 1 segundo:
+# 	Si hay init_info:
+# 		Carga la info
+# 		Crea project_path
+# 	Si hay launch:
+# 		Se mira si es un lanzamiento normal o es por un cold redeploy
+# 		Si es normal:
+# 			Se busca un puerto disponible desde start_port_search en adelante
+# 			Se crea el FlaskThread en el puerto disponible 
+# 		Si no (es decir, es por un cold_redeploy):
+# 			Se lanza el FlaskThread en el puerto start_port_search
+# 		Se lanza el thread creado: FlaskThread (en el que se lanza la app que queda corriendo para atender las invocaciones desde otros agentes)
+# 		Se hacen peticiones al puerto en el que se ha lanzado Flask hasta obtener respuesta
+# 		Se compara el id y proyecto del agente con el que devuelve la peticion:
+# 			Si es igual: se manda por mp_flask2agent_queue el dato {"flask_proc_ok":{"port": local_port}}
+# 			Si es distinto: se manda por mp_flask2agent_queue el dato {"restart_flask_proc": ERR_FLASK_PORT_IN_USE}
+# 	Si hay after_launch_info:
+# 		Recarga diccionarios (cloudbook_dict_agents, agents_grant, du_list)
+# 		Incializa cloudbook_version a 1
+# 		Importa el código de las dus
+# 		Pone dus_loaded a True
+# 	Si hay hot_redeploy: 
+# 		Recarga diccionarios (cloudbook_dict_agents, agents_grant)
+# 		Aumenta cloudbook_version
 def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue):
 	print("Flask Process is now active")
 	# NOT USED globals: configjson_dict, agent_config_dict, stats_queue, grant_queue
@@ -626,7 +631,7 @@ def create_stats(t1):
 # (a port collision), restarts the FlaskProcess.
 def init_flask_process_and_check_ok(cold_redeploy):
 	global my_agent_ID, my_project_name, fs_path, start_port_search, mp_flask2agent_queue, mp_agent2flask_queue, flask_proc
-	# Pass the init_info to the FlaskProcess
+	# Create the init_info_item for FlaskProcess
 	# {"init_info": {"my_agent_ID": my_agent_ID, "my_project_name": my_project_name, "fs_path": fs_path, 
 	#				"start_port_search": start_port_search}}
 	init_info_item = {}
@@ -635,20 +640,22 @@ def init_flask_process_and_check_ok(cold_redeploy):
 	init_info_item["init_info"]["my_project_name"] = my_project_name
 	init_info_item["init_info"]["fs_path"] = fs_path
 	init_info_item["init_info"]["start_port_search"] = start_port_search
-	mp_agent2flask_queue.put(init_info_item)
 
-	# Tell the FlaskProcess to launch the FlaskThread
+	# Create the launch_item for the FlaskProcess
 	# {"launch": True}
 	launch_item = {}
 	launch_item["launch"] = {}
 	launch_item["launch"]["cold_redeploy"] = cold_redeploy
-	mp_agent2flask_queue.put(launch_item)
 
 	# If cold_redeploy, create virtual restart request from the flask proecess
 	if cold_redeploy:
 		mp_queue_data = {}
 		mp_queue_data["restart_flask_proc"] = "Requested restart from deployer (cold redeploy)."
 		mp_flask2agent_queue.put(mp_queue_data)
+	# Else, pass the items to FlaskProcess through the agent2flask queue
+	else:
+		mp_agent2flask_queue.put(init_info_item)
+		mp_agent2flask_queue.put(launch_item)
 
 	# Check the FlaskProcess launched the FlaskThread correctly and there are no collisions on ports (and retrieve local_port).
 	# If there is a port collision, restart the FlaskProcess
@@ -908,12 +915,12 @@ if __name__ == "__main__":
 		#print("agents_grant.json has been read.\n agents_grant = ", agents_grant)
 
 	# Internal function to load the "cloudbook.json" file created by the deployer
-	def read_cloudbook_file(dict_only=False):
+	def read_cloudbook_file(hot_redeploy=False):
 		global cloudbook_dict_agents
 		global du_list
 		cloudbook_dict_agents = loader.load_dictionary(cloudbookjson_file_path)
 		#print("cloudbook.json has been read.\n cloudbook_dict_agents = ", cloudbook_dict_agents)
-		if not dict_only:
+		if not hot_redeploy:
 			du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
 
 	# Get the cloudbook and the agents_grant (DUs and IP/port of each agent).
@@ -950,14 +957,6 @@ if __name__ == "__main__":
 	while True:
 		current_time = time.monotonic()
 
-		# # While there is data in the queue, analyze it
-		# while not mp_flask2agent_queue.empty():
-		# 	item = mp_flask2agent_queue.get()
-		# 	if "restart_flask_proc" in item:
-		# 		flask_proc.terminate()
-		# 	else:
-		# 		pass
-
 		# While there is data in the queue, analyze it
 		while not grant_queue.empty():
 			item = grant_queue.get()
@@ -980,7 +979,7 @@ if __name__ == "__main__":
 			if hot_redeploy:
 				print("Executing HOT_REDEPLOY...")
 				read_agents_grant_file()
-				read_cloudbook_file(dict_only=True)
+				read_cloudbook_file(hot_redeploy=True)
 				# Pass the init_info to the FlaskProcess
 				# {"hot_redeploy": {"cloudbook_dict_agents": cloudbook_dict_agents, "agents_grant": agents_grant}}
 				hot_redeploy_item = {}

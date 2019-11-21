@@ -37,7 +37,7 @@ configjson_dict = {}
 round_robin_index = 0
 
 # FIFO queue that passes stats to the stats file creator thread
-stats_queue = queue.Queue(maxsize=0)
+mp_stats_queue = None
 
 # FIFO queue that passes the changes of grant to the grant file creator thread
 grant_queue = queue.Queue(maxsize=0)
@@ -185,7 +185,7 @@ def invoke(configuration = None):
 	stats_data = {}
 	stats_data['invoked'] = invoked_function[j+1:] #only fun name without du
 	stats_data['invoker'] = invoker_function
-	stats_queue.put(stats_data)
+	mp_stats_queue.put(stats_data)
 
 	# If the function belongs to the agent
 	if invoked_du in du_list:
@@ -253,7 +253,7 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 		stats_data = {}
 		stats_data['invoked'] = invoked_function
 		stats_data['invoker'] = invoker_function
-		stats_queue.put(stats_data)
+		mp_stats_queue.put(stats_data)
 
 		try:
 			return eval(res)
@@ -450,9 +450,11 @@ def flaskThreaded(port, sock=None):
 # 	Si hay hot_redeploy: 
 # 		Recarga diccionarios (cloudbook_dict_agents, agents_grant)
 # 		Aumenta cloudbook_version
-def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue):
+def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue_param):
 	print("Flask Process is now active")
-	# NOT USED globals: configjson_dict, agent_config_dict, stats_queue, grant_queue
+	global mp_stats_queue
+	mp_stats_queue = mp_stats_queue_param
+	# NOT USED globals: configjson_dict, agent_config_dict, grant_queue
 	# NOT MODIFIED globals: cloudbook_path, round_robin_index
 
 	# Note: this global variables belong to other process so its values are the ones described above (just after the imports)
@@ -585,7 +587,7 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue):
 		time.sleep(1)
 
 
-# Target function of the stats file creator thread. Implements the consumer of the producer/consumer model using stats_queue.
+# Target function of the stats file creator thread. Implements the consumer of the producer/consumer model using mp_stats_queue.
 def create_stats(t1):
 	print("Stats creator thread started")
 	time_start = time.monotonic()
@@ -594,8 +596,8 @@ def create_stats(t1):
 
 	while True:
 		current_time = time.monotonic()
-		while not stats_queue.empty():
-			item = stats_queue.get()
+		while not mp_stats_queue.empty():
+			item = mp_stats_queue.get()
 			#print("New stat: ", item)
 
 			# Add data to dictionary
@@ -688,7 +690,7 @@ def init_flask_process_and_check_ok(cold_redeploy):
 
 					# Terminate and create a new FlaskProcess
 					flask_proc.terminate()
-					flask_proc = Process(target=flaskProcessFunction, args=(mp_agent2flask_queue, mp_flask2agent_queue))
+					flask_proc = Process(target=flaskProcessFunction, args=(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue))
 					flask_proc.start()
 
 					# Pass initial info and launch
@@ -855,9 +857,10 @@ if __name__ == "__main__":
 	# Input/output queues for process communication
 	mp_agent2flask_queue = Queue()
 	mp_flask2agent_queue = Queue()
+	mp_stats_queue = Queue()
 
 	# Launch the FlaskProcess
-	flask_proc = Process(target=flaskProcessFunction, args=(mp_agent2flask_queue, mp_flask2agent_queue))
+	flask_proc = Process(target=flaskProcessFunction, args=(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue))
 	flask_proc.start()
 
 	# Launch the stats file creator thread

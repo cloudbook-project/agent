@@ -238,8 +238,17 @@ class AddAgentTab(ttk.Frame):
 		self.agents_info = agents_info
 		self.project_name = project_name
 
+		# Check if the project already has an agent_0
+		self.has_agent_0 = False
+		for i in self.agents_info:
+			if self.agents_info[i]['AGENT_ID']=='agent_0':
+				self.has_agent_0 = True
+		#print("Project", self.project_name, "has has agent_0:", self.has_agent_0)
+
 		self.label_welcome = ttk.Label(self)
-		self.label_welcome["text"] = "This tab allows you to create agents.\nNote: if the id=0 checkbox is selected it and agent_0 already exists it will be replaced with the new one."
+		self.label_welcome["text"] = "This tab allows you to create agents.\nNote: you need an agent with id=0 in the \
+project to be able to run it (only 1 per project)."
+
 		self.label_welcome.grid(column=0, row=1, columnspan=3)
 		
 		# self.circle_label = ttk.Label(self)
@@ -271,6 +280,9 @@ class AddAgentTab(ttk.Frame):
 		self.checkbutton_agent_0 = ttk.Checkbutton(self, text="Create the agent with id=0.", \
 			variable=self.is_agent_0, onvalue=True, offvalue=False)
 		self.checkbutton_agent_0.grid(column=0, row=5, columnspan=3)
+		# This checkbox is disabled if there is already an agent_0
+		if self.has_agent_0:
+			self.checkbutton_agent_0["state"] = (tk.DISABLED)
 
 		self.create_circle = ttk.Button(self, text="Create agent and attach", command=self.create)
 		#self.attach_circle = ttk.Button(self, text="Attach circle", command=self.attach)

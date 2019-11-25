@@ -440,7 +440,7 @@ def flaskThreaded(port, sock=None):
 # 		Se lanza el thread creado: FlaskThread (en el que se lanza la app que queda corriendo para atender las invocaciones desde otros agentes)
 # 		Se hacen peticiones al puerto en el que se ha lanzado Flask hasta obtener respuesta
 # 		Se compara el id y proyecto del agente con el que devuelve la peticion:
-# 			Si es igual: se manda por mp_flask2agent_queue el dato {"flask_proc_ok":{"port": local_port}}
+# 			Si es igual: se manda por mp_flask2agent_queue el dato {"flask_proc_ok":{"local_port": local_port}}
 # 			Si es distinto: se manda por mp_flask2agent_queue el dato {"restart_flask_proc": ERR_FLASK_PORT_IN_USE}
 # 	Si hay after_launch_info:
 # 		Recarga diccionarios (cloudbook_dict_agents, agents_grant, du_list)
@@ -528,7 +528,7 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 					mp_queue_data = {}
 					if my_project_name + " - " + my_agent_ID == retrieved_project_id:
 						mp_queue_data["flask_proc_ok"] = {}
-						mp_queue_data["flask_proc_ok"]["port"] = local_port
+						mp_queue_data["flask_proc_ok"]["local_port"] = local_port
 					else:
 						print(ERR_FLASK_PORT_IN_USE) # This is the 2nd flask in the same port (race conditions)
 						print("The flask process will be restarted automatically.")
@@ -668,7 +668,7 @@ def init_flask_process_and_check_ok(cold_redeploy):
 
 			if "flask_proc_ok" in item:
 				try:
-					local_port = item["flask_proc_ok"]["port"]
+					local_port = item["flask_proc_ok"]["local_port"]
 					flask_proc_ok = True
 					break
 				except Exception as e:

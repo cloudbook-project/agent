@@ -189,6 +189,8 @@ def invoke(configuration = None):
 
 	# If the function belongs to the agent
 	if invoked_du in du_list:
+		if "%3d" in invoked_data:
+			invoked_data = invoked_data.replace("%3d","=")
 		try:
 			resul = eval(invoked_function+"("+invoked_data+")")
 		except:
@@ -246,6 +248,8 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 		print(invoked_du, invoked_function, invoked_data)
 		#res=eval(invoked_function)
 		print("Hago eval de: "+ invoked_du[0]+"."+invoked_function+"("+invoked_data+")")
+		if "%3d" in invoked_data:
+			invoked_data = invoked_data.replace("%3d","=")
 		res = eval(invoked_du[0]+"."+invoked_function+"("+invoked_data+")")
 		print("Responde: ", res)
 
@@ -750,16 +754,16 @@ def get_port_available(port):
 
 # This function gets the local IP. In the case of multiple IPs, gets the default route.
 def get_local_ip():
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        # doesn't even have to be reachable
-        s.connect(('10.255.255.255', 1))
-        local_ip = s.getsockname()[0]
-    except:
-        local_ip = '127.0.0.1'
-    finally:
-        s.close()
-    return local_ip
+	s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+	try:
+		# doesn't even have to be reachable
+		s.connect(('10.255.255.255', 1))
+		local_ip = s.getsockname()[0]
+	except:
+		local_ip = '127.0.0.1'
+	finally:
+		s.close()
+	return local_ip
 
 
 # This function gets the local IP if the lan_mode is set to True and the external IP and port if the lan_mode is set to False.
@@ -806,9 +810,27 @@ def is_critical(du):
 if __name__ == "__main__":
 	print("Starting agent...")
 
+	# Process parameters
+	num_param = len(sys.argv)
+	for i in range(1,len(sys.argv)):
+		if sys.argv[i]=="-agent_id":
+			print(sys.argv[i], sys.argv[i+1])
+			agent_id = sys.argv[i+1]
+			i=i+1
+		if sys.argv[i]=="-project_folder":
+			print(sys.argv[i], sys.argv[i+1])
+			my_project_name = sys.argv[i+1]
+			i=i+1
+	
+	# Check if the non-optional parameters have been set
+	if not agent_id:
+		print ("option -agent_id missing")
+		sys.exit(1)
+	if not my_project_name:
+		print ("option -project_folder missing")
+		sys.exit(1)
+
 	# Load agent config file
-	agent_id = sys.argv[1]
-	my_project_name = sys.argv[2]
 	project_path = cloudbook_path + os.sep + my_project_name
 	agent_config_dict = loader.load_dictionary(project_path + os.sep + "agents" + os.sep + "config_"+agent_id+".json")
 

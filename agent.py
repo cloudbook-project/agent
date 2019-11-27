@@ -43,7 +43,7 @@ mp_stats_queue = None
 grant_queue = queue.Queue(maxsize=0)
 
 # Global variable to store the general path to cloudbook, used to access all files and folders needed
-if(platform.system()=="Windows"):
+if platform.system()=="Windows":
 	cloudbook_path = os.environ['HOMEDRIVE'] + os.environ['HOMEPATH'] + os.sep + "cloudbook"
 else:
 	cloudbook_path = os.environ['HOME'] + os.sep + "cloudbook"

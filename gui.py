@@ -82,15 +82,12 @@ def sigint_handler(*args):
 	print("\nExiting program...\n")
 	os._exit(0)
 
+
 def on_closing():
 	if tk.messagebox.askokcancel("Quit", "Are you sure to close the program?\nAny running agent will be stopped."):
-		# Clean the possible processes running before exiting the program
 		sigint_handler()
-		# print("\n\nAll running agents on any project (if any) will be stopped...")
-		# kill_all_processes()
-		# print("\nExiting program...\n")
-		# os._exit(0)
 	print("Program not exited. Everything is kept the same.\n")
+
 
 def kill_all_processes():
 	for proj in projects:
@@ -117,9 +114,6 @@ def kill_process(proc):
 # This tab class includes all the information related to the different agents that live in the machine (in a project).
 class GeneralInfoTab (ttk.Frame):
 
-	agents_info = {}
-	project_name = ""
-
 	# Builds the layout and fills it.
 	def __init__(self, *args, agents_info, project_name):
 		super().__init__(*args)
@@ -128,14 +122,14 @@ class GeneralInfoTab (ttk.Frame):
 		self.agents_info = agents_info
 		self.project_name = project_name
 
-		print("Active processes: ", projects[project_name]["agent_pid_dict"], "\n")
-
-		self.label_welcome = ttk.Label(self)
-		self.label_welcome["text"] = ("Welcome to CloudBook user interface. Your agents are:")
-		self.label_welcome.grid(row=0, column=0, columnspan=4, padx=100, pady=10)
 		title_bar = [" Agent ID ", " Grant ", " Status ", "", "", ""]
 		h = int(len(self.agents_info)+1)
 		w = 6
+
+		self.label_welcome = ttk.Label(self)
+		self.label_welcome["text"] = ("Welcome to CloudBook user interface. Your agents are:")
+		self.label_welcome.grid(row=0, column=0, columnspan=w-3, padx=100, pady=10)
+
 		for i in range(h):
 			for j in range(w):
 				if(i==0):
@@ -193,7 +187,6 @@ class GeneralInfoTab (ttk.Frame):
 			proc = subprocess.Popen("python3 agent.py "+ agent_id + " " + self.project_name, shell=True, preexec_fn=os.setsid)
 		projects[self.project_name]["agent_pid_dict"][agent_id] = proc
 		print("Active processes: ", projects[self.project_name]["agent_pid_dict"], "\n")
-		#time.sleep(2)
 		app.refresh()
 		
 	# Functionality of the "Stop" button.
@@ -227,10 +220,6 @@ class GeneralInfoTab (ttk.Frame):
 # This tab includes the information and tools to create a new agent.
 class AddAgentTab(ttk.Frame):
 
-	agents_info = {}
-	project_name = ""
-	is_agent_0 = None
-
 	def __init__(self, *args, agents_info, project_name):
 		super().__init__(*args)
 		self.is_agent_0 = BooleanVar()
@@ -243,50 +232,55 @@ class AddAgentTab(ttk.Frame):
 		for i in self.agents_info:
 			if self.agents_info[i]['AGENT_ID']=='agent_0':
 				self.has_agent_0 = True
-		#print("Project", self.project_name, "has has agent_0:", self.has_agent_0)
 
-		self.label_welcome = ttk.Label(self)
-		self.label_welcome["text"] = "This tab allows you to create agents.\nNote: you need an agent with id=0 in the \
-project to be able to run it (only 1 per project)."
+		# Configure the grid
+		for col in range(5):
+			Grid.columnconfigure(self, col, weight=1)
+		for row in range(8):
+			Grid.rowconfigure(self, row, weight=1)
 
-		self.label_welcome.grid(column=0, row=1, columnspan=3)
-		
-		# self.circle_label = ttk.Label(self)
-		# self.circle_label["text"]=("Circle ID")
-		# self.circle_label.grid(column=0, row=2)
-		# self.circle_entry = ttk.Entry(self, text="LOCAL")
-		# self.circle_entry["state"]=(tk.DISABLED)
-		# self.circle_entry.grid(column=1, row=2)
-		# self.set_circle_button = ttk.Button(self, text="Set", command=self.set_circle_ID)
-		# self.set_circle_button['state']='disable'
-		# self.set_circle_button.grid(column=2, row=2)
+		# Info labels
+		self.label_info1 = ttk.Label(self, text="This tab allows you to create agents.")
+		self.label_info1.grid(row=0, column=1, columnspan=3, sticky=E+W)
 
-		self.grant_label = ttk.Label(self)
-		self.grant_label["text"] = ("Grant Level")
-		self.grant_label.grid(column=0, row=3)
-		self.grant_combo = ttk.Combobox(self)
+		self.label_info2 = ttk.Label(self, text="Note: you need one agent with id=0 in the project to be able to run it.")
+		self.label_info2.grid(row=1, column=1, columnspan=3, sticky=E+W)
+
+		ttk.Label(self, text="").grid(row=2, column=0, sticky=E+W) # Line separator
+
+		# Grant label and combobox
+		self.grant_label = ttk.Label(self, text="Grant Level")
+		self.grant_label.grid(row=3, column=1, sticky=E+W)
+
 		self.grant_combo = ttk.Combobox(self, state="readonly")
 		self.grant_combo["values"] = ["HIGH", "MEDIUM", "LOW",]
 		self.grant_combo.current(1)
-		self.grant_combo.grid(column=1, row=3)
+		self.grant_combo.grid(row=3, column=2, sticky=E+W)
 
-		ttk.Label(self, text="Filesystem path").grid(column=0, row=4)
-		self.fspath = ttk.Entry(self)
-		self.fspath["state"] = (tk.DISABLED)
-		self.fspath.grid(column=1, row=4)
-		self.browse_fs_path_button = ttk.Button(self, text="Select", command=self.browse_FS_path)
-		self.browse_fs_path_button.grid(column=2, row=4)
+		# Fspath label, entry and button
+		self.fspath_label = ttk.Label(self, text="Filesystem path")
+		self.fspath_label.grid(row=4, column=1, sticky=E+W)
 
+		self.fspath_entry = ttk.Entry(self)
+		self.fspath_entry["state"] = (tk.DISABLED)
+		self.fspath_entry.grid(row=4, column=2, sticky=E+W)
+
+		self.fspath_button = ttk.Button(self, text="Select", command=self.browse_fspath)
+		self.fspath_button.grid(row=4, column=3, sticky=E+W)
+
+		# Agent with id=0 checkbutton
 		self.checkbutton_agent_0 = ttk.Checkbutton(self, text="Create the agent with id=0.", \
 			variable=self.is_agent_0, onvalue=True, offvalue=False)
-		self.checkbutton_agent_0.grid(column=0, row=5, columnspan=3)
+		self.checkbutton_agent_0.grid(row=5, column=2, sticky=E+W)
 		# This checkbox is disabled if there is already an agent_0
 		if self.has_agent_0:
 			self.checkbutton_agent_0["state"] = (tk.DISABLED)
 
-		self.create_circle = ttk.Button(self, text="Create agent and attach", command=self.create)
-		#self.attach_circle = ttk.Button(self, text="Attach circle", command=self.attach)
-		self.create_circle.grid(column=1, row=7)
+		ttk.Label(self, text="").grid(row=6, column=0, sticky=E+W) # Line separator
+
+		# Create agent button
+		self.create_agent_button = ttk.Button(self, text="Create agent", command=self.create)
+		self.create_agent_button.grid(row=7, column=2, sticky=E+W)
 	
 	# Functionality for the grant combobox selection
 	def switch(self, index):
@@ -301,7 +295,7 @@ project to be able to run it (only 1 per project)."
 	def create(self):
 		grant = self.switch(self.grant_combo.current())
 		print("Grant selected:", grant)
-		fspath = self.fspath.get()
+		fspath = self.fspath_entry.get()
 		if fspath != "":
 			print("Path to distributed filesystem:", fspath)
 		else:
@@ -312,54 +306,65 @@ project to be able to run it (only 1 per project)."
 		app.refresh()
 	
 	# This button launches a new gui to select the folder for the FS path. This parameter is optional.
-	def browse_FS_path(self):
+	def browse_fspath(self):
 		filename = filedialog.askdirectory()
-		self.fspath["state"] = (tk.NORMAL)
-		self.fspath.insert(0,filename)
-		self.fspath["state"] = ("readonly")
+		self.fspath_entry["state"] = (tk.NORMAL)
+		self.fspath_entry.insert(0,filename)
+		self.fspath_entry["state"] = ("readonly")
 		print(filename)
 
 
 # Tab that contains the information of a specific agent located in the machine.
 # It also provides functionality to edit its parameters such as the FS, or the grant.
 class AgentXTab(ttk.Frame):
-
-	agent = []
-	project_name = ""
 	
 	def __init__(self, *args, agent, project_name):
 		super().__init__(*args)
 		self.agent = agent
 		self.project_name = project_name
 
-		ttk.Label(self, text=agent['AGENT_ID'], font="bold").grid(column=2, row=0, columnspan=5)
-		ttk.Label(self, text="Edit agent info. Please, make sure the agent is stopped before any change.").grid(column=1, row=1, columnspan=5)
+		# Configure the grid
+		for col in range(6):
+			Grid.columnconfigure(self, col, weight=1)
+		for row in range(5):
+			Grid.rowconfigure(self, row, weight=1)
 
-		#ttk.Label(self, text="Circle ID:").grid(column=1, row=3, sticky='w')
-		#ttk.Label(self, text=agent['CIRCLE_ID']).grid(column=3, row=3, sticky='w')
-		# self.text = ttk.Entry(self, state="readonly")
-		# self.text.grid(column=6, row=3)
-		# self.edit_circle_id_button = ttk.Button(self, text='Edit', command=self.edit_circle_id)
-		# self.edit_circle_id_button['state']='disable'
-		# self.edit_circle_id_button.grid(column=8, row=3)
+		# Agent name label
+		self.label_name = ttk.Label(self, text=agent['AGENT_ID'], font=("Helvetica", 12, "bold"))
+		self.label_name.grid(row=0, column=0, columnspan=6)
 
-		ttk.Label(self, text="Grant level:").grid(column=1, row=4, sticky='w')
-		ttk.Label(self, text=agent['GRANT_LEVEL']).grid(column=3, row=4, sticky='w')
-		self.combo = ttk.Combobox(self, state="readonly")
-		self.combo["values"] = ["HIGH", "MEDIUM", "LOW"]
-		self.combo.current({"HIGH":0, "MEDIUM":1, "LOW":2}.get(agent['GRANT_LEVEL']))
-		self.combo.grid(column=6, row=4)
-		#self.combo.bind(set_grant)
-		ttk.Button(self, text='Edit', command=self.set_grant).grid(column=8, row=4)
+		# Info label
+		self.label_info = ttk.Label(self, text="Edit agent info. Please, make sure the agent is stopped before any change.")
+		self.label_info.grid(row=1, column=0, columnspan=6)
 
-		ttk.Label(self, text="Filesystem Path:").grid(column=1, row=5, sticky='w')
-		textfs = agent['DISTRIBUTED_FS']
-		ttk.Label(self, text="..."+textfs[-27:]).grid(column=3, row=5, sticky='w')
-		self.fspath = ttk.Entry(self)
-		self.fspath["state"] = (tk.DISABLED)
-		self.fspath.grid(column=6, row=5)
-		self.browse_fs_path_button = ttk.Button(self, text="Select", command=self.browse_FS_path)
-		self.browse_fs_path_button.grid(column=8, row=5)
+		# Grant label, value_label combobox and button
+		self.grant_label = ttk.Label(self, text="Grant level:")
+		self.grant_label.grid(row=2, column=1, sticky=E+W)
+
+		self.grant_value_label = ttk.Label(self, text=agent['GRANT_LEVEL'])
+		self.grant_value_label.grid(row=2, column=2, sticky=E+W)
+
+		self.grant_combobox = ttk.Combobox(self, state="readonly")
+		self.grant_combobox["values"] = ["HIGH", "MEDIUM", "LOW"]
+		self.grant_combobox.current({"HIGH":0, "MEDIUM":1, "LOW":2}.get(agent['GRANT_LEVEL']))
+		self.grant_combobox.grid(row=2, column=3, sticky=E+W)
+
+		self.grant_button = ttk.Button(self, text='Edit', command=self.set_grant)
+		self.grant_button.grid(row=2, column=4, sticky=E+W)
+
+		# Fspath label, value_label, combobox and button
+		self.fspath_label = ttk.Label(self, text="Filesystem Path:")
+		self.fspath_label.grid(row=3, column=1, sticky=E+W)
+
+		self.fspath_value_label = ttk.Label(self, text="..."+agent['DISTRIBUTED_FS'][-27:], width=30)
+		self.fspath_value_label.grid(row=3, column=2, sticky=E+W)
+
+		self.fspath_entry = ttk.Entry(self)
+		self.fspath_entry["state"] = (tk.DISABLED)
+		self.fspath_entry.grid(row=3, column=3, sticky=E+W)
+
+		self.fspath_button = ttk.Button(self, text="Select", command=self.browse_fspath)
+		self.fspath_button.grid(row=3, column=4, sticky=E+W)
 
 
 	# To be added when the functionality is implemented.
@@ -373,16 +378,16 @@ class AgentXTab(ttk.Frame):
 				2: "LOW"
 			}  
 			return switcher.get(index, "No grant selected.")
-		print("The new grant for agent " + self.agent['AGENT_ID'] + " is: " + switch(self.combo.current()))
-		agent.edit_agent(agent_id=self.agent['AGENT_ID'], project_name=self.project_name, new_grant=switch(self.combo.current()))
+		print("The new grant for agent " + self.agent['AGENT_ID'] + " is: " + switch(self.grant_combobox.current()))
+		agent.edit_agent(agent_id=self.agent['AGENT_ID'], project_name=self.project_name, new_grant=switch(self.grant_combobox.current()))
 		app.refresh()
 		
 	# Functionality of the browse button. Launches a folder selection gui to select the FS path. 
-	def browse_FS_path(self):
+	def browse_fspath(self):
 		new_fs_path = filedialog.askdirectory()
-		self.fspath["state"] = (tk.NORMAL)
-		self.fspath.insert(0,new_fs_path)
-		self.fspath["state"] = ("readonly")
+		self.fspath_entry["state"] = (tk.NORMAL)
+		self.fspath_entry.insert(0,new_fs_path)
+		self.fspath_entry["state"] = ("readonly")
 		print("The new path for the agent " + self.agent['AGENT_ID'] + " is: " + new_fs_path)
 		agent.edit_agent(agent_id=self.agent['AGENT_ID'], project_name=self.project_name, new_fs=new_fs_path)
 
@@ -431,12 +436,12 @@ class Application(ttk.Frame):
 		root.title("CloudBook Agent GUI")
 
 		self.notebook = ttk.Notebook(self)
-		tk.Button(self, text="Refresh", command=self.refresh).pack(side=tk.TOP)
-		tk.Button(self, text="Stop all agents", command=self.stop_all_agents).pack(side=tk.BOTTOM)
+		tk.Button(self, text="Refresh", command=self.refresh, width=10).grid(row=0, column=3, sticky=E+W)
+		tk.Button(self, text="Stop all agents", command=self.stop_all_agents, width=10).grid(row=0, column=4, sticky=E+W)
 
 		self.refresh()
 	
-	#Functionality for refresh button. Basically it rebuilds the framework.
+	# Functionality for refresh button. Basically it rebuilds the framework.
 	def refresh(self):
 		get_info()
 
@@ -458,10 +463,10 @@ class Application(ttk.Frame):
 			except:
 				pass
 
-		self.notebook.pack(expand=True, fill="both")
+		self.notebook.grid(row=2, column=0, columnspan=8, sticky=E+W)
 		self.pack(expand=True, fill="both")
 
-	#Functionality for Stop all processes button.
+	# Functionality for Stop all processes button.
 	def stop_all_agents(self):
 		kill_all_processes()
 		self.refresh()

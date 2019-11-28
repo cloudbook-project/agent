@@ -184,7 +184,7 @@ class GeneralInfoTab (ttk.Frame):
 		if(platform.system()=="Windows"):
 			proc = subprocess.Popen("py agent.py -agent_id " + agent_id + " -project_folder " + self.project_name, shell=True, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
 		else:
-			proc = subprocess.Popen("python3 agent.py "+ agent_id + " " + self.project_name, shell=True, preexec_fn=os.setsid)
+			proc = subprocess.Popen("python3 agent.py -agent_id " + agent_id + " -project_folder " + self.project_name, shell=True, preexec_fn=os.setsid)
 		projects[self.project_name]["agent_pid_dict"][agent_id] = proc
 		print("Active processes: ", projects[self.project_name]["agent_pid_dict"], "\n")
 		app.refresh()

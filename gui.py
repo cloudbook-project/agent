@@ -236,8 +236,8 @@ class AddAgentTab(ttk.Frame):
 		# Configure the grid
 		for col in range(5):
 			Grid.columnconfigure(self, col, weight=1)
-		for row in range(8):
-			Grid.rowconfigure(self, row, weight=1)
+		#for row in range(8):
+		#	Grid.rowconfigure(self, row, weight=1)
 
 		# Info labels
 		self.label_info1 = ttk.Label(self, text="This tab allows you to create agents.")
@@ -326,45 +326,49 @@ class AgentXTab(ttk.Frame):
 		# Configure the grid
 		for col in range(6):
 			Grid.columnconfigure(self, col, weight=1)
-		for row in range(5):
-			Grid.rowconfigure(self, row, weight=1)
+		#for row in range(5):
+		#	Grid.rowconfigure(self, row, weight=1)
 
 		# Agent name label
 		self.label_name = ttk.Label(self, text=agent['AGENT_ID'], font=("Helvetica", 12, "bold"))
 		self.label_name.grid(row=0, column=0, columnspan=6)
 
+		ttk.Label(self, text="").grid(row=1, column=0, sticky=E+W) # Line separator
+
 		# Info label
 		self.label_info = ttk.Label(self, text="Edit agent info. Please, make sure the agent is stopped before any change.")
-		self.label_info.grid(row=1, column=0, columnspan=6)
+		self.label_info.grid(row=2, column=0, columnspan=6)
+
+		ttk.Label(self, text="").grid(row=3, column=0, sticky=E+W) # Line separator
 
 		# Grant label, value_label combobox and button
 		self.grant_label = ttk.Label(self, text="Grant level:")
-		self.grant_label.grid(row=2, column=1, sticky=E+W)
+		self.grant_label.grid(row=4, column=1, sticky=E+W)
 
 		self.grant_value_label = ttk.Label(self, text=agent['GRANT_LEVEL'])
-		self.grant_value_label.grid(row=2, column=2, sticky=E+W)
+		self.grant_value_label.grid(row=4, column=2, sticky=E+W)
 
 		self.grant_combobox = ttk.Combobox(self, state="readonly")
 		self.grant_combobox["values"] = ["HIGH", "MEDIUM", "LOW"]
 		self.grant_combobox.current({"HIGH":0, "MEDIUM":1, "LOW":2}.get(agent['GRANT_LEVEL']))
-		self.grant_combobox.grid(row=2, column=3, sticky=E+W)
+		self.grant_combobox.grid(row=4, column=3, sticky=E+W)
 
 		self.grant_button = ttk.Button(self, text='Edit', command=self.set_grant)
-		self.grant_button.grid(row=2, column=4, sticky=E+W)
+		self.grant_button.grid(row=4, column=4, sticky=E+W)
 
 		# Fspath label, value_label, combobox and button
 		self.fspath_label = ttk.Label(self, text="Filesystem Path:")
-		self.fspath_label.grid(row=3, column=1, sticky=E+W)
+		self.fspath_label.grid(row=5, column=1, sticky=E+W)
 
 		self.fspath_value_label = ttk.Label(self, text="..."+agent['DISTRIBUTED_FS'][-27:], width=30)
-		self.fspath_value_label.grid(row=3, column=2, sticky=E+W)
+		self.fspath_value_label.grid(row=5, column=2, sticky=E+W)
 
 		self.fspath_entry = ttk.Entry(self)
 		self.fspath_entry["state"] = (tk.DISABLED)
-		self.fspath_entry.grid(row=3, column=3, sticky=E+W)
+		self.fspath_entry.grid(row=5, column=3, sticky=E+W)
 
 		self.fspath_button = ttk.Button(self, text="Select", command=self.browse_fspath)
-		self.fspath_button.grid(row=3, column=4, sticky=E+W)
+		self.fspath_button.grid(row=5, column=4, sticky=E+W)
 
 
 	# To be added when the functionality is implemented.
@@ -436,8 +440,8 @@ class Application(ttk.Frame):
 		root.title("CloudBook Agent GUI")
 
 		self.notebook = ttk.Notebook(self)
-		tk.Button(self, text="Refresh", command=self.refresh, width=10).grid(row=0, column=3, sticky=E+W)
-		tk.Button(self, text="Stop all agents", command=self.stop_all_agents, width=10).grid(row=0, column=4, sticky=E+W)
+		tk.Button(self, text="Refresh", command=self.refresh, width=4).grid(row=0, column=3, sticky=E+W)
+		tk.Button(self, text="Stop all agents", command=self.stop_all_agents, width=4).grid(row=0, column=4, sticky=E+W)
 
 		self.refresh()
 	

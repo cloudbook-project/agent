@@ -89,10 +89,12 @@ ERR_NO_LAN = "ERROR: the local IP was not found. The device is not connected to 
 ERR_NO_INTERNET = "ERROR: external IP or port not found. Either the device is not conected to the internet or the STUN server \
 did not accept the request."
 GEN_ERR_RESTARTING_FLASK = "GENERIC ERROR: something went wrong when restarting the flask process."
-GEN_ERR_INIT_CHECK_FLASK = "GENERIC ERROR: something whent wrong when initializing of checking that FlaskProcess was up and \
+GEN_ERR_INIT_CHECK_FLASK = "GENERIC ERROR: something went wrong when initializing of checking that FlaskProcess was up and \
 running correctly."
 ERR_GET_PROJ_ID_REFUSED = "ERROR: conection refused when FlaskProcess was trying to check the id of the agent running on the \
 requested port."
+ERR_LOAD_CRIT_DU_CLOUDBOOK_RUNNING = "ERROR: cloudbook is already running and the critical du should not be loaded at this \
+point in order to avoid unexpected behaviours due to global variables lost their state."
 
 
 
@@ -560,6 +562,10 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 					du_files_path = fs_path + os.sep + "du_files"
 					for du in du_list:
 						print("  Trying to load", du)
+						if is_critical(du) and cloudbook_is_running():
+							print("  ", ERR_LOAD_CRIT_DU_CLOUDBOOK_RUNNING)
+							print("  ", du, "has been skipped (not loaded)")
+							break
 						du_i_file_path = du_files_path + os.sep + du+".py"
 						if not os.path.exists(du_i_file_path):
 							print(ERR_DUS_NOT_EXIST)
@@ -782,7 +788,17 @@ def get_port_and_ip(lan_mode=True):
 	return (ip, port)
 
 
-# This function to check if there are any redeployment files
+# This function checks if cloudbook is already running in order not to load critical DUs in cold redeploy
+def cloudbook_is_running():
+	running_file_path = fs_path + os.sep + "RUNNING"
+	running = False
+	if os.path.exists(running_file_path):
+		#print("RUNNING file found.")
+		running = True
+	return running
+
+
+# This function checks if there are any redeployment files
 def check_redeploy_files():
 	hot_redeploy_file_path = fs_path + os.sep + "HOT_REDEPLOY"
 	cold_redeploy_file_path = fs_path + os.sep + "COLD_REDEPLOY"

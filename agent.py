@@ -1,15 +1,22 @@
-from flask import Flask
-from flask import request
-#from flask import abort, redirect, url_for
-import loader
-import os, sys, time, threading, logging, platform
-from multiprocessing import Process, Queue
-from pynat import get_ip_info #requires pip3 install pynat
-import urllib # this import requires pip3 install urllib
-import queue
+#####   IMPORTS   #####
+# Internet
+from pynat import get_ip_info		# Requires pip3 install pynat
+from flask import Flask, request	# Requires pip3 install flask
+import urllib						# Requires pip3 install urllib
 import socket
-import random, string
-import builtins
+
+# Multi thread/process
+import time
+import threading, queue
+from multiprocessing import Process, Queue
+
+# System, files
+import os, sys, platform
+import loader				# In project directory
+import logging
+
+# Basic
+import random, string, builtins
 
 
 

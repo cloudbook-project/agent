@@ -1,14 +1,23 @@
-import tkinter as tk
+#####   IMPORTS   #####
+# Graphics
+import tkinter as tk			# Requires pip3 install tkinter
 from tkinter import ttk
 from tkinter import filedialog
 from tkinter import *
 from tkinter import messagebox
-import os, json
-import subprocess, sys, os, signal, platform
 
-import agent
-import loader
+# Multi thread/process
 import time
+import subprocess
+import signal
+
+# System, files
+import os, sys, platform
+import loader				# In project directory
+import json
+
+# Project specific
+import agent				# In project directory
 
 
 
@@ -322,63 +331,75 @@ class AddAgentTab(ttk.Frame):
 # It also provides functionality to edit its parameters such as the FS, or the grant.
 class AgentXTab(ttk.Frame):
 	
-	def __init__(self, *args, agent, project_name):
+	def __init__(self, *args, agent_info, project_name):
 		super().__init__(*args)
-		self.agent = agent
+		self.agent_info = agent_info
 		self.project_name = project_name
 
 		# Configure the grid
-		for col in range(6):
+		for col in range(4):
 			Grid.columnconfigure(self, col, weight=1)
 		#for row in range(5):
 		#	Grid.rowconfigure(self, row, weight=1)
 
 		# Agent name label
-		self.label_name = ttk.Label(self, text=agent['AGENT_ID'], font=("Helvetica", 12, "bold"))
-		self.label_name.grid(row=0, column=0, columnspan=6)
+		self.label_name = ttk.Label(self, text=agent_info['AGENT_ID'], font=("Helvetica", 12, "bold"))
+		self.label_name.grid(row=0, column=0, columnspan=4)
 
 		ttk.Label(self, text="").grid(row=1, column=0, sticky=E+W) # Line separator
 
 		# Info label
 		self.label_info = ttk.Label(self, text="Edit agent info. Please, make sure the agent is stopped before any change.")
-		self.label_info.grid(row=2, column=0, columnspan=6)
+		self.label_info.grid(row=2, column=0, columnspan=4)
 
 		ttk.Label(self, text="").grid(row=3, column=0, sticky=E+W) # Line separator
 
-		# Grant label, value_label combobox and button
+		# Grant label, value_label, combobox and button
 		self.grant_label = ttk.Label(self, text="Grant level:")
-		self.grant_label.grid(row=4, column=1, sticky=E+W)
+		self.grant_label.grid(row=4, column=0, sticky=E+W)
 
-		self.grant_value_label = ttk.Label(self, text=agent['GRANT_LEVEL'])
-		self.grant_value_label.grid(row=4, column=2, sticky=E+W)
+		self.grant_value_label = ttk.Label(self, text=agent_info['GRANT_LEVEL'])
+		self.grant_value_label.grid(row=4, column=1, sticky=E+W)
 
 		self.grant_combobox = ttk.Combobox(self, state="readonly")
 		self.grant_combobox["values"] = ["HIGH", "MEDIUM", "LOW"]
-		self.grant_combobox.current({"HIGH":0, "MEDIUM":1, "LOW":2}.get(agent['GRANT_LEVEL']))
-		self.grant_combobox.grid(row=4, column=3, sticky=E+W)
+		self.grant_combobox.current({"HIGH":0, "MEDIUM":1, "LOW":2}.get(agent_info['GRANT_LEVEL']))
+		self.grant_combobox.grid(row=4, column=2, sticky=E+W)
 
-		self.grant_button = ttk.Button(self, text='Edit', command=self.set_grant)
-		self.grant_button.grid(row=4, column=4, sticky=E+W)
 
 		# Fspath label, value_label, combobox and button
 		self.fspath_label = ttk.Label(self, text="Filesystem Path:")
-		self.fspath_label.grid(row=5, column=1, sticky=E+W)
+		self.fspath_label.grid(row=5, column=0, sticky=E+W)
 
-		self.fspath_value_label = ttk.Label(self, text="..."+agent['DISTRIBUTED_FS'][-27:], width=30)
-		self.fspath_value_label.grid(row=5, column=2, sticky=E+W)
+		if len(agent_info['DISTRIBUTED_FS'])>36:
+			self.fspath_value_label = ttk.Label(self, text="..."+agent_info['DISTRIBUTED_FS'][-33:], width=36)
+		else:
+			self.fspath_value_label = ttk.Label(self, text=agent_info['DISTRIBUTED_FS'], width=36)
+		self.fspath_value_label.grid(row=5, column=1, sticky=E+W)
 
-		self.fspath_entry = ttk.Entry(self)
+		self.fspath_entry = ttk.Entry(self, width=36)
 		self.fspath_entry["state"] = (tk.DISABLED)
-		self.fspath_entry.grid(row=5, column=3, sticky=E+W)
+		self.fspath_entry.grid(row=5, column=2, sticky=E+W)
 
 		self.fspath_button = ttk.Button(self, text="Select", command=self.browse_fspath)
-		self.fspath_button.grid(row=5, column=4, sticky=E+W)
+		self.fspath_button.grid(row=5, column=3, sticky=E+W)
 
+		ttk.Label(self, text="").grid(row=6, column=0, sticky=E+W) # Line separator
 
-	# To be added when the functionality is implemented.
+		# Save changes button
+		self.save_changes_button = ttk.Button(self, width=20, text='Save changes', command=self.save_changes)
+		self.save_changes_button.grid(row=7, column=0, columnspan=4)
+		
+	# Functionality of the browse button. Launches a folder selection gui to select the FS path. 
+	def browse_fspath(self):
+		initial_dir = self.agent_info['DISTRIBUTED_FS']
+		new_fspath_value = filedialog.askdirectory(initialdir=initial_dir)
+		self.fspath_entry["state"] = (tk.NORMAL)
+		self.fspath_entry.insert(0, new_fspath_value)
+		self.fspath_entry["state"] = ("readonly")
 
-	# Functionality to edit the agent grant. It calls "edit_agent()" function in agent.py.
-	def set_grant(self):
+	# Functionality save the changes in grant and/or fspath. It calls "edit_agent()" function in agent.py.
+	def save_changes(self):
 		def switch(index):
 			switcher = {
 				0: "HIGH",
@@ -386,18 +407,12 @@ class AgentXTab(ttk.Frame):
 				2: "LOW"
 			}  
 			return switcher.get(index, "No grant selected.")
-		print("The new grant for agent " + self.agent['AGENT_ID'] + " is: " + switch(self.grant_combobox.current()))
-		agent.edit_agent(agent_id=self.agent['AGENT_ID'], project_name=self.project_name, new_grant=switch(self.grant_combobox.current()))
+		new_grant_value = switch(self.grant_combobox.current())
+		new_fspath_value = self.fspath_entry.get()
+		print("The new grant for agent " + self.agent_info['AGENT_ID'] + " is: " + new_grant_value)
+		print("The new path for the agent " + self.agent_info['AGENT_ID'] + " is: " + new_fspath_value)
+		agent.edit_agent(agent_id=self.agent_info['AGENT_ID'], project_name=self.project_name, new_grant=new_grant_value, new_fs=new_fspath_value)
 		app.refresh()
-		
-	# Functionality of the browse button. Launches a folder selection gui to select the FS path. 
-	def browse_fspath(self):
-		new_fs_path = filedialog.askdirectory()
-		self.fspath_entry["state"] = (tk.NORMAL)
-		self.fspath_entry.insert(0,new_fs_path)
-		self.fspath_entry["state"] = ("readonly")
-		print("The new path for the agent " + self.agent['AGENT_ID'] + " is: " + new_fs_path)
-		agent.edit_agent(agent_id=self.agent['AGENT_ID'], project_name=self.project_name, new_fs=new_fs_path)
 
 
 # Tab that represents a project. It conatins all the tabs refering to a project.
@@ -419,20 +434,14 @@ class ProjectTab(ttk.Frame):
 
 		self.tabs["AgentXTab"] = []
 		for info in agents_info:
-			# globals()['self.agents_info'+str(info)] = AgentXTab(self.notebook, agent=agents_info[info], project_name=project_name)
+			# globals()['self.agents_info'+str(info)] = AgentXTab(self.notebook, agent_info=agents_info[info], project_name=project_name)
 			# self.notebook.add(globals()['self.agents_info'+str(info)], text="Agent "+str(info), padding=10)
 			self.tabs["AgentXTab"].append(None)
-			self.tabs["AgentXTab"][info] = AgentXTab(self.notebook, agent=agents_info[info], project_name=project_name)
+			self.tabs["AgentXTab"][info] = AgentXTab(self.notebook, agent_info=agents_info[info], project_name=project_name)
 			self.notebook.add(self.tabs["AgentXTab"][info], text="Agent "+str(info), padding=10)
 
 		self.notebook.pack(expand=True, fill="both")
 		self.pack(expand=True, fill="both")
-
-
-# New tab reserved for future use.
-# class Tab3(ttk.Frame):
-#     def __init__(self, *args):
-#         super().__init__(*args)
 
 
 # Class to build the general framework of the GUI.
@@ -478,6 +487,7 @@ class Application(ttk.Frame):
 	def stop_all_agents(self):
 		kill_all_processes()
 		self.refresh()
+
 
 
 #####   GUI MAIN   #####

@@ -24,7 +24,7 @@ my_project_name = None
 # Dictionary of agents 
 cloudbook_dict_agents = {}
 
-# List of deployable units loaded by this agent
+# List of deployable units that this agent has to load
 du_list = []
 
 # Dictionary of agent configuration
@@ -64,8 +64,8 @@ fs_path = None
 # }
 agents_grant = {}
 
-# Global boolean variable for the state of the dus that the agent has to load (True if they have been loaded, False otherwise)
-dus_loaded = False
+# Global variable with the list of deployable units that have already been loaded
+loaded_du_list = []
 
 # Number of times the cloudbook has changed and DUs have been (re)loaded
 cloudbook_version = 0
@@ -93,8 +93,8 @@ GEN_ERR_INIT_CHECK_FLASK = "GENERIC ERROR: something went wrong when initializin
 running correctly."
 ERR_GET_PROJ_ID_REFUSED = "ERROR: conection refused when FlaskProcess was trying to check the id of the agent running on the \
 requested port."
-ERR_LOAD_CRIT_DU_CLOUDBOOK_RUNNING = "ERROR: cloudbook is already running and the critical du should not be loaded at this \
-point in order to avoid unexpected behaviours due to global variables lost their state."
+ERR_LOAD_CRIT_DU_CLOUDBOOK_RUNNING = "ERROR: cloudbook is already running and critical dus should not be loaded at this \
+point in order to avoid unexpected behaviours due to global variables may have lost their state."
 
 
 
@@ -159,10 +159,6 @@ def invoke(configuration = None):
 	global my_agent_ID
 	global stats_dict
 
-	while not dus_loaded:
-		print("Invoked but waiting for dus to be loaded.")
-		time.sleep(1)
-
 	print("=====AGENT: /INVOKE=====")
 	print("Thread ID:", threading.get_ident())
 	invoked_data = ""
@@ -191,6 +187,9 @@ def invoke(configuration = None):
 
 	# If the function belongs to the agent
 	if invoked_du in du_list:
+		while invoked_du not in loaded_du_list:
+			print("The function belongs to the agent, but it has not been loaded yet.")
+			time.sleep(1)
 		if "%3d" in invoked_data:
 			invoked_data = invoked_data.replace("%3d","=")
 		try:
@@ -452,7 +451,7 @@ def flaskThreaded(port, sock=None):
 # 		Recarga diccionarios (cloudbook_dict_agents, agents_grant, du_list)
 # 		Incializa cloudbook_version a 1
 # 		Importa el código de las dus
-# 		Pone dus_loaded a True
+# 		Añade cada du cargada a loaded_du_list
 # 	Si hay hot_redeploy: 
 # 		Recarga diccionarios (cloudbook_dict_agents, agents_grant)
 # 		Aumenta cloudbook_version
@@ -463,7 +462,7 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 	# NOT USED globals: configjson_dict, agent_config_dict, grant_queue
 	# NOT MODIFIED globals: cloudbook_path, round_robin_index
 
-	# Note: this global variables belong to other process so its values are the ones described above (just after the imports)
+	# Note: this global variables belong to other process
 	# init_info vars:
 	global my_agent_ID
 	global my_project_name
@@ -479,7 +478,7 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 	global agents_grant
 	global cloudbook_version
 	global du_list
-	global dus_loaded
+	global loaded_du_list
 
 	# hot_redeploy vars:
 	# global cloudbook_dict_agents
@@ -545,8 +544,9 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 					raise e
 
 			elif "after_launch_info" in item:
-				if dus_loaded:
+				if loaded_du_list:
 					print(ERR_DUS_ALREADY_LOADED)
+					raise Exception()
 				try:
 					cloudbook_dict_agents = item["after_launch_info"]["cloudbook_dict_agents"]
 					agents_grant = item["after_launch_info"]["agents_grant"]
@@ -574,9 +574,11 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 						exec("from du_files import "+du, globals())
 						exec(du+".invoker=outgoing_invoke")
 						print("  ", du, "successfully loaded")
+						loaded_du_list.append(du)
 					
-					print("All DUs have been loaded successfully.")
-					dus_loaded = True
+					if all([du in loaded_du_list for du in du_list]):
+						print("All DUs have been loaded successfully.")
+
 				except Exception as e:
 					print(GEN_ERR_LOADING_DUS)
 					raise e

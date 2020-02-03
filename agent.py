@@ -9,6 +9,7 @@ import socket
 import time
 import threading, queue
 from multiprocessing import Process, Queue
+import signal
 
 # System, files
 import os, sys, platform
@@ -365,6 +366,15 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 
 #####   AGENT FUNCTIONS   #####
 
+# Function handler of the Ctrl+C event
+def sigint_handler(*args):
+	try:
+		flask_proc.terminate()
+	except Exception as e:
+		pass
+	os._exit(0)
+
+
 # This function is used by the GUI. Generates a new agent given the grant level and the FS (if provided)
 # Checks the OS to adapt the path of the folders.
 # Generates a default configuration file that is edited and adapted afterwards.
@@ -462,7 +472,7 @@ def flaskThreaded(port, sock=None):
 # 	Si hay hot_redeploy: 
 # 		Recarga diccionarios (cloudbook_dict_agents, agents_grant)
 # 		Aumenta cloudbook_version
-def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue_param):
+def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue_param, stdin_stream):
 	print("Flask Process is now active")
 	global mp_stats_queue
 	mp_stats_queue = mp_stats_queue_param
@@ -510,6 +520,8 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 				except Exception as e:
 					print(ERR_QUEUE_KEY_VALUE)
 					raise e
+				if my_agent_ID=="agent_0":
+					sys.stdin = os.fdopen(stdin_stream)
 
 			elif "launch" in item:
 				try:
@@ -709,7 +721,7 @@ def init_flask_process_and_check_ok(cold_redeploy):
 
 					# Terminate and create a new FlaskProcess
 					flask_proc.terminate()
-					flask_proc = Process(target=flaskProcessFunction, args=(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue))
+					flask_proc = Process(target=flaskProcessFunction, args=(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue, stdin_stream))
 					flask_proc.start()
 
 					# Pass initial info and launch
@@ -835,6 +847,12 @@ def is_critical(du):
 if __name__ == "__main__":
 	print("Starting agent...")
 
+	# Set Ctrl+C handler
+	signal.signal(signal.SIGINT, sigint_handler)
+
+	# Save input stream to be able to use input in console of agent_0 for interactive programs
+	stdin_stream = sys.stdin.fileno()
+
 	# Process parameters
 	num_param = len(sys.argv)
 	for i in range(1,len(sys.argv)):
@@ -907,7 +925,7 @@ if __name__ == "__main__":
 	mp_stats_queue = Queue()
 
 	# Launch the FlaskProcess
-	flask_proc = Process(target=flaskProcessFunction, args=(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue))
+	flask_proc = Process(target=flaskProcessFunction, args=(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue, stdin_stream))
 	flask_proc.start()
 
 	# Launch the stats file creator thread

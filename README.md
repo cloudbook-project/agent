@@ -60,7 +60,7 @@ Despite the fact that the graphical interface has been developed thinking on the
 	4. Finally click on the "Save changes" button.
 
 
-###### Important note: the GUI is the most recommended method to control the agent for any action (create, launch, stop or delete). However, it is possible to create them manually writing the specific file or to launch them by console or command line. In the case you launch an agent through the console, it may leave some subprocesses open due to the design (and those have to be closed manually from task manager or similar).
+###### Important note: the GUI is the most recommended method to control the agent for any action (create, launch, stop or delete). However, it is possible to create them manually writing the specific file or to launch them by console or command line. In the case you launch an agent through the console, it can be closed with Ctrl+C, but if the program does not leave in normal conditions it may leave a subprocess open due to the design (and those have to be closed manually from task manager or similar).
 
 * Launching agent with the terminal/command line:
 	`python agent.py -agent_id <agent_id> -project_folder <project_folder>`  

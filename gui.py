@@ -117,6 +117,23 @@ def kill_process(proc):
 		os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
 
 
+# Function that returns the pid of the process in which the agent_0 is running based on the window name, which is: CLOUDBOOK_interactive _cmd_(<project_name>)
+def get_pid_agent_0(project_name):
+	import re
+	output = subprocess.Popen('tasklist /FI \"WindowTitle eq CLOUDBOOK_interactive_cmd_('+project_name+')\"', shell=True, stdout=subprocess.PIPE)
+	response = output.communicate()
+	decoded_response = response[0].decode("utf-8")
+
+	lines_response = decoded_response.split("\r\n")				# Response should be composed of 5 lines (there may be more if run several instances)
+	for lineno in range(0, len(lines_response)):
+		line = lines_response[lineno]
+		if lineno>=3 and lineno<len(lines_response)-1:			# Only the 4th line is interesting
+			line_single_spaced = re.sub(r"\s\s+", " ", line)	# Trim multiple spaces (substitute for only 1 space)
+			line_split = line_single_spaced.split(" ")			# Split by spaces
+			pid = int(line_split[1])							# Take the second argument (the PID)
+			return pid
+
+
 
 #####   GUI CLASSES   #####
 
@@ -191,11 +208,20 @@ class GeneralInfoTab (ttk.Frame):
 		agent_id = self.agents_info[r-3]['AGENT_ID']
 		print("Launching agent", agent_id)
 		if(platform.system()=="Windows"):
-			proc = subprocess.Popen("py agent.py -agent_id " + agent_id + " -project_folder " + self.project_name, shell=True, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
-			# if agent_id=="agent_0":
-			# 	proc = subprocess.Popen("start py agent.py -agent_id " + agent_id + " -project_folder " + self.project_name, shell=True, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
-			# else:
-			# 	proc = subprocess.Popen("py agent.py -agent_id " + agent_id + " -project_folder " + self.project_name, shell=True, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+			# proc = subprocess.Popen("py agent.py -agent_id " + agent_id + " -project_folder " + self.project_name, shell=True, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+			if agent_id=="agent_0":
+				subprocess.Popen("start \"CLOUDBOOK_interactive_cmd_("+self.project_name+")\" py -3 agent.py -agent_id " + agent_id + " -project_folder " + self.project_name, shell=True, creationflags=subprocess.CREATE_NEW_CONSOLE)
+				class Dummy:
+					def __init__(self):
+						self.pid = None
+
+				proc = Dummy()
+				while not proc.pid:
+					time.sleep(1)
+					proc.pid = get_pid_agent_0(self.project_name)
+				#proc = subprocess.Popen("py -3 agent.py -agent_id " + agent_id + " -project_folder " + self.project_name, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+			else:
+				proc = subprocess.Popen("py -3 agent.py -agent_id " + agent_id + " -project_folder " + self.project_name, shell=True, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
 		else:
 			proc = subprocess.Popen("python3 agent.py -agent_id " + agent_id + " -project_folder " + self.project_name, shell=True, preexec_fn=os.setsid)
 		projects[self.project_name]["agent_pid_dict"][agent_id] = proc

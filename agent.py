@@ -8,7 +8,7 @@ import socket
 # Multi thread/process
 import time
 import threading, queue
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Queue, Value, Array
 import signal
 
 # System, files
@@ -375,6 +375,69 @@ def sigint_handler(*args):
 	os._exit(0)
 
 
+# This function puts a string into a multiprocesssing array and fills the extra array slots with "\x00".
+# Note: internally converts the string into an array of binary utf-8 encoded characters.
+# If the string does not fit in the array, exception is raised.
+def string2array(str_var, arr_var):
+	with arr_var.get_lock():
+		arr_len = len(arr_var)
+		str_len = len(str_var)
+		if str_len>arr_len:
+			raise Exception("The string is longer than the array.")
+		else:
+			equal_length_string = str_var + "".join("\x00" for _ in range(arr_len - str_len))
+			arr_var.value = equal_length_string.encode("utf-8")
+
+
+# This function takes a multiprocesssing array and returns its value as a normal string.
+# Note: internally converts the array of binary utf-8 encoded characters back to string.
+def array2string(arr_var):
+	with arr_var.get_lock():
+		return arr_var.value.decode("utf-8")
+
+
+# This function takes the grant string and puts it in a multiprocessing value.
+# Note: internally converts the grant string into a number.
+def grant2value(grant, val_var):
+	if grant=="LOW":
+		val_var.value = 1
+	elif grant=="MEDIUM":
+		val_var.value = 2
+	elif grant=="HIGH":
+		val_var.value = 3
+	else:
+		val_var.value = 0
+
+# This function takes the value form a multiprocessing value and returns it as a string.
+# Note: internally converts the number back to string.
+def value2grant(val_var):
+	number = val_var.value
+	if number==1:
+		return "LOW"
+	if number==2:
+		return "MEDIUM"
+	if number==3:
+		return "HIGH"
+	return ""
+
+
+# This function returns a dictionary containing all the information of the agent and circle that may be useful for a programmer
+# that uses cloudbook in order to make a program that behaves differently depending on Cloudbook internal information.
+def __CLOUDBOOK__():
+	programmer_accessible_dict = {}
+	programmer_accessible_dict["agent"] = {}
+	#programmer_accessible_dict["agent"]["grant"] = value2grant(NOMBRE_DE_LA_VARIABLE_VALUE_DE_GRANT)#####################################################
+	#programmer_accessible_dict["agent"]["IP"] = array2string(NOMBRE_DE_LA_VARIABLE_ARRAY_DE_IP)##########################################################
+	programmer_accessible_dict["agent"]["id"] = my_agent_ID
+
+	programmer_accessible_dict["circle"] = {}
+	#programmer_accessible_dict["circle"]["num_agents_with_dus"] = len(XXXXXXXXXXXXXXXXXXX)###############################################################
+	programmer_accessible_dict["circle"]["num_available_agents"] = len(agents_grant)
+	programmer_accessible_dict["circle"]["agents_grant"] = agents_grant # dict(Keys: agent ids. Values: dicts(Keys: "GRANT", "IP" and "PORT". Values:...))
+
+	return programmer_accessible_dict
+
+
 # This function is used by the GUI. Generates a new agent given the grant level and the FS (if provided)
 # Checks the OS to adapt the path of the folders.
 # Generates a default configuration file that is edited and adapted afterwards.
@@ -592,6 +655,7 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 						exec("global "+du, globals())
 						exec("from du_files import "+du, globals())
 						exec(du+".invoker=outgoing_invoke")
+						exec(du+".__CLOUDBOOK__=__CLOUDBOOK__")
 						print("  ", du, "successfully loaded")
 						loaded_du_list.append(du)
 					

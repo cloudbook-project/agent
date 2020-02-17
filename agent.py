@@ -18,6 +18,7 @@ import logging
 
 # Basic
 import random, string, builtins
+import json
 
 
 
@@ -170,26 +171,51 @@ def invoke(configuration = None):
 	print("=====AGENT: /INVOKE=====")
 	print("Thread ID:", threading.get_ident())
 	invoked_data = ""
-	print("REQUEST.form: ", request.form)
-	invoked_function = request.args.get('invoked_function')
-	try:
-		invoker_function = request.args.get('invoker_function')
-	except:
-		invoker_function = None
-	for i in request.form:
-		invoked_data = i
-	print("INVOKED DATA:", invoked_data)
-	print("invoked_function:", invoked_function)
+	params = None
 
-	# Separate du and function
-	j = invoked_function.find(".")
-	invoked_du = invoked_function[0:j]
+	request_data = request.get_json()
+	# If the json content exists (new format of request)
+	if request_data is not None:
+		print("This request has the new format with JSON")
+		print("REQUEST.json:", request_data)
+
+		if "invoker_function" in request_data:
+			invoker_function = request_data["invoker_function"]
+		if "invoked_function" in request_data:
+			invoked_function = request_data["invoked_function"]
+		if "invoked_du" in request_data:
+			invoked_du = request_data["invoked_du"]
+		if "invoked_data" in request_data:
+			invoked_data = request_data["invoked_data"]
+		#if "params" in request_data:
+		#	params = request_data["params"]
+
+	#If the json content does not exist (old format of request)
+	else:
+		print("This request has the old format")
+		print("REQUEST.form: ", request.form)
+		du_and_invoked_function = request.args.get('invoked_function') 			# Must always exist
+		invoker_function = request.args.get('invoker_function', None) 			# Defaults to None if it does not exist
+		
+		(invoked_du, invoked_function) = du_and_invoked_function.split(".") 	# Separate du and function
+
+		for i in request.form:
+			invoked_data = i
+
+	assert invoked_du is not None 			# Must exist
+	assert invoked_function is not None  	# Must exist
+
+	# Print the data obtained from the request (and du_list)
 	print("invoked_du:", invoked_du)
+	print("invoked_function:", invoked_function)
+	print("invoker_function:", invoker_function)
+	print("invoked_data:", invoked_data)
+
 	print("du_list:", du_list)
 	
 	# Queue data stats
 	stats_data = {}
-	stats_data['invoked'] = invoked_function[j+1:] #only fun name without du
+	stats_data['invoked'] = invoked_function
 	stats_data['invoker'] = invoker_function
 	mp_stats_queue.put(stats_data)
 
@@ -198,16 +224,27 @@ def invoke(configuration = None):
 		while invoked_du not in loaded_du_list:
 			print("The function belongs to the agent, but it has not been loaded yet.")
 			time.sleep(1)
-		if "%3d" in invoked_data:
-			invoked_data = invoked_data.replace("%3d","=")
-		try:
-			resul = eval(invoked_function+"("+invoked_data+")")
-		except:
-			resul = eval(invoked_function+"('"+invoked_data+"')")
+
+		# If params is None, the invoked_data is used
+		if params is None:
+			if "%3d" in invoked_data:
+				invoked_data = invoked_data.replace("%3d","=")
+			try:
+				resul = eval(invoked_du+"."+invoked_function+"("+invoked_data+")")
+			except:
+				resul = eval(invoked_du+"."+invoked_function+"('"+invoked_data+"')")
+		# If params exist, use it
+		else:
+			print("The posibility of params in the request is still not implemented.")
+			raise NotImplementedError()
+			#################### TO DO ####################
+			
+
+	# If the function does not belong to this agent
 	else:
 		print("This function does not belong to this agent.")
 		resul = "none" #remote_invoke(invoked_du, invoked_function) Is this neccesary?
-	print()
+
 	return resul
 
 def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function = None, configuration = None):
@@ -303,19 +340,31 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 			raise e 	# This should never happen
 
 		try:
-			if invoker_function == None:
-				url = 'http://'+desired_host_ip_port+"/invoke?invoked_function="+remote_du+"."+invoked_function
-			else:
-				url = 'http://'+desired_host_ip_port+"/invoke?invoked_function="+remote_du+"."+invoked_function+"&invoker_function="+invoker_function
+			#if invoker_function == None:
+			#	url = 'http://'+desired_host_ip_port+"/invoke?invoked_function="+remote_du+"."+invoked_function
+			#else:
+			#	url = 'http://'+desired_host_ip_port+"/invoke?invoked_function="+remote_du+"."+invoked_function+"&invoker_function="+invoker_function
+			#print(url)
+
+			url = "http://"+desired_host_ip_port+"/invoke"
 			print(url)
 
-			send_data = invoked_data.encode()
-			print("Sending data: ",send_data)
-			request_object = urllib.request.Request(url, send_data)
-			print("Request launched: ", url)
+			print("Invoked data:", invoked_data)
+			dict_to_send = {\
+				"invoked_du":remote_du,\
+				"invoked_function":invoked_function,\
+				"invoker_function":invoker_function,\
+				"invoked_data":invoked_data\
+				#"params":"NOT_SUPPORTED YET"\
+				}
+			
+			print("dict_to_send:", dict_to_send)
+			dict_to_send_json = json.dumps(dict_to_send).encode('utf8')
+			request_object = urllib.request.Request(url, data=dict_to_send_json, headers={'content-type': 'application/json'})
+			print("Request launched:", url)
 			r = urllib.request.urlopen(request_object)
 			break
-		except:
+		except Exception as e:
 			print("URL was not answered by " + remote_agent + " (IP:port --> " + desired_host_ip_port + ")")
 			write_alarm("WARNING")
 

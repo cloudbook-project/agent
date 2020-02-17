@@ -19,6 +19,7 @@ def load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents, configuration =
 def load_dictionary(filename, configuration = None):
 	with open(filename, 'r') as file:
 		aux = json.load(file)
+		file.close()
 	return aux
 
 

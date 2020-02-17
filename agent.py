@@ -48,9 +48,6 @@ round_robin_index = 0
 # FIFO queue that passes stats to the stats file creator thread
 mp_stats_queue = None
 
-# FIFO queue that passes the changes of grant to the grant file creator thread
-grant_queue = queue.Queue(maxsize=0)
-
 # Global variable to store the general path to cloudbook, used to access all files and folders needed
 if platform.system()=="Windows":
 	cloudbook_path = os.environ['HOMEDRIVE'] + os.environ['HOMEPATH'] + os.sep + "cloudbook"
@@ -534,9 +531,6 @@ def edit_agent(agent_id, project_name, new_grant='', new_fs=''):
 
 	if(new_grant!=''):
 		config_dict["GRANT_LEVEL"] = new_grant
-		grant_data = {}
-		grant_data['grant'] = new_grant
-		grant_queue.put(grant_data)
 
 	if(new_fs!=''):
 		config_dict["DISTRIBUTED_FS"] = new_fs
@@ -588,7 +582,7 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 	print("Flask Process is now active")
 	global mp_stats_queue
 	mp_stats_queue = mp_stats_queue_param
-	# NOT USED globals: configjson_dict, agent_config_dict, grant_queue
+	# NOT USED globals: configjson_dict, agent_config_dict
 	# NOT MODIFIED globals: cloudbook_path, round_robin_index
 
 	# Note: this global variables belong to other process
@@ -1020,17 +1014,6 @@ if __name__ == "__main__":
 	else:
 		settings_string += "  - Lan mode: OFF (using external ip and port)\n"
 	print(settings_string)
-	# print("The agent has the following configuration:\n")
-	# print("  - ID:", my_agent_ID)
-	# print("  - Project:", my_project_name)
-	# print("  - Grant:", my_grant)
-	# print("  - FSPath:", fs_path)
-	# print("  - Stats creation period:", agent_stats_interval)
-	# print("  - Grant file creation period:", agent_grant_interval)
-	# if lan_mode:
-	# 	print("  - Lan mode: ON (using local ip and port)")
-	# else:
-	# 	print("  - Lan mode: OFF (using external ip and port)")
 
 	# Input/output queues for process communication
 	mp_agent2flask_queue = Queue()
@@ -1138,18 +1121,14 @@ if __name__ == "__main__":
 	while True:
 		current_time = time.monotonic()
 
-		# While there is data in the queue, analyze it
-		while not grant_queue.empty():
-			item = grant_queue.get()
-			#print("Grant item retrieved from queue: ", item)
-			try:
-				item_grant = item['grant']
-				if item_grant=='HIGH' or item_grant=='MEDIUM' or item_grant=='LOW':
-					grant = item_grant
-				else:
-					print(ERR_QUEUE_KEY_VALUE, "Grant queue invalid value.")
-			except:
-				print(ERR_QUEUE_KEY_VALUE, "Grant queue invalid key.")
+		# Load agent config file and update grant. Note: fspath changes are not taken into account while executing
+		dict_for_grant_check = loader.load_dictionary(project_path + os.sep + "agents" + os.sep + "config_"+my_agent_ID+".json")
+		grant_in_file = dict_for_grant_check["GRANT_LEVEL"]
+
+		if grant_in_file!=my_grant:
+			my_grant = grant_in_file
+			print("New grant has been configured:", my_grant)
+
 
 		# When the the interval time expires
 		if current_time-time_start >= agent_grant_interval:

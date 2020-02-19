@@ -146,6 +146,7 @@ def get_project_agent_id():
 # 	print("/quit route has been invoked.")
 # 	return "Quitting..."
 
+
 @application.route("/invoke", methods=['GET','POST'])
 def invoke(configuration = None):
 	'''
@@ -220,15 +221,15 @@ def invoke(configuration = None):
 			if "%3d" in invoked_data:
 				invoked_data = invoked_data.replace("%3d","=")
 			try:
-				resul = eval(invoked_du+"."+invoked_function+"("+invoked_data+")")
+				eval_result = eval(invoked_du+"."+invoked_function+"("+invoked_data+")")
 			except:
-				resul = eval(invoked_du+"."+invoked_function+"('"+invoked_data+"')")
+				eval_result = eval(invoked_du+"."+invoked_function+"('"+invoked_data+"')")
 		# If the function does not belong to this agent
 		else:
 			print("This function does not belong to this agent.")
-			resul = "none"
+			eval_result = "none"
 
-		return resul
+		return eval_result if eval_result is not None else ""
 		################################## OLD REQUEST FORMAT END ##############################################
 
 	# Print the data obtained from the request (and du_list)
@@ -258,20 +259,20 @@ def invoke(configuration = None):
 			print("The function belongs to the agent, but it has not been loaded yet.")
 			time.sleep(1)
 
-		# Eval
+		# Create command and eval
 		command_to_eval = invoked_du + "." + invoked_function + "(*params['args'], **params['kwargs'])"
 		print("Command to evaluate is:\t", command_to_eval)
 		eval_result = eval(command_to_eval)
-		print("Response:", res)
+		print("Response:", eval_result)
 
 	# If the function does not belong to this agent
 	else:
 		print("This function does not belong to this agent.")
 		eval_result = "none"
 
-	return eval_result
+	return eval_result if eval_result is not None else ""
 
-#OLD --> def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function = None, configuration = None):
+
 def outgoing_invoke(invocation_dict, configuration = None):
 	global round_robin_index
 	'''
@@ -338,6 +339,7 @@ def outgoing_invoke(invocation_dict, configuration = None):
 	if invoked_du in du_list and invoked_du != 'du_default':
 		print("===AGENT: LOCAL INVOCATION===")
 
+		# Create command and eval
 		command_to_eval = invoked_du + "." + invoked_function + "(*params['args'], **params['kwargs'])"
 		print("Command to evaluate is:\t", command_to_eval)
 		eval_result = eval(command_to_eval)

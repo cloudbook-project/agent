@@ -182,12 +182,10 @@ def invoke(configuration = None):
 			invoked_function = request_data["invoked_function"]
 		if "invoked_du" in request_data:
 			invoked_du = request_data["invoked_du"]
-		if "invoked_data" in request_data:
-			invoked_data = request_data["invoked_data"]
-		#if "params" in request_data:
-		#	params = request_data["params"]
+		if "params" in request_data:
+			params = request_data["params"]
 
-	#If the json content does not exist (old format of request)
+	# If the json content does not exist (old format of request) ############ DELETE (se queda de momento para el deployer_run)###########
 	else:
 		print("This request has the old format")
 		print("REQUEST.form: ", request.form)
@@ -199,17 +197,55 @@ def invoke(configuration = None):
 		for i in request.form:
 			invoked_data = i
 
-	assert invoked_du is not None 			# Must exist
-	assert invoked_function is not None  	# Must exist
+		print("invoked_du:", invoked_du)
+		print("invoked_function:", invoked_function)
+		print("invoker_function:", invoker_function)
+		print("invoked_data:", invoked_data)
+
+		print("du_list:", du_list)
+
+		#raise Exception("Old invocation syntax is now not supported")
+		# Queue data stats
+		stats_data = {}
+		stats_data['invoked'] = invoked_function
+		stats_data['invoker'] = invoker_function
+		mp_stats_queue.put(stats_data)
+
+		# If the function belongs to the agent
+		if invoked_du in du_list:
+			while invoked_du not in loaded_du_list:
+				print("The function belongs to the agent, but it has not been loaded yet.")
+				time.sleep(1)
+
+			if "%3d" in invoked_data:
+				invoked_data = invoked_data.replace("%3d","=")
+			try:
+				resul = eval(invoked_du+"."+invoked_function+"("+invoked_data+")")
+			except:
+				resul = eval(invoked_du+"."+invoked_function+"('"+invoked_data+"')")
+		# If the function does not belong to this agent
+		else:
+			print("This function does not belong to this agent.")
+			resul = "none"
+
+		return resul
+		################################## OLD REQUEST FORMAT END ##############################################
 
 	# Print the data obtained from the request (and du_list)
-	print("invoked_du:", invoked_du)
-	print("invoked_function:", invoked_function)
-	print("invoker_function:", invoker_function)
-	print("invoked_data:", invoked_data)
+	print("Invocation dictionary:", "\n", 				\
+		"  invoked_du", invoked_du, "\n", 				\
+		"  invoked_function", invoked_function, "\n", 	\
+		"  invoker_function", invoker_function, "\n", 	\
+		"  params", params, "\n"						\
+		)
 
-	print("du_list:", du_list)
-	
+	# Check parameters
+	assert invoked_du is not None 			# Must exist
+	assert invoked_function is not None 	# Must exist
+	assert params is not None 				# Must exist
+	assert params["args"] is not None 		# Must exist, may be empty list
+	assert params["kwargs"] is not None 	# Must exist, may be empty dictionary
+
 	# Queue data stats
 	stats_data = {}
 	stats_data['invoked'] = invoked_function
@@ -222,29 +258,21 @@ def invoke(configuration = None):
 			print("The function belongs to the agent, but it has not been loaded yet.")
 			time.sleep(1)
 
-		# If params is None, the invoked_data is used
-		if params is None:
-			if "%3d" in invoked_data:
-				invoked_data = invoked_data.replace("%3d","=")
-			try:
-				resul = eval(invoked_du+"."+invoked_function+"("+invoked_data+")")
-			except:
-				resul = eval(invoked_du+"."+invoked_function+"('"+invoked_data+"')")
-		# If params exist, use it
-		else:
-			print("The posibility of params in the request is still not implemented.")
-			raise NotImplementedError()
-			#################### TO DO ####################
-			
+		# Eval
+		command_to_eval = invoked_du + "." + invoked_function + "(*params['args'], **params['kwargs'])"
+		print("Command to evaluate is:\t", command_to_eval)
+		eval_result = eval(command_to_eval)
+		print("Response:", res)
 
 	# If the function does not belong to this agent
 	else:
 		print("This function does not belong to this agent.")
-		resul = "none" #remote_invoke(invoked_du, invoked_function) Is this neccesary?
+		eval_result = "none"
 
-	return resul
+	return eval_result
 
-def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function = None, configuration = None):
+#OLD --> def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function = None, configuration = None):
+def outgoing_invoke(invocation_dict, configuration = None):
 	global round_robin_index
 	'''
 	This function is the one that calls the functions that do not belong to the agent's dus
@@ -258,7 +286,7 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 		Build the call
 			Gets the host (TODO: Cache the ip)
 			Build the url (in order the invoke function from the other agent understands it: 
-				url='http://'+host+"/invoke?invoked_function="+remote_du+"."+invoked_function)
+				url='http://'+host+"/invoke?invoked_function="+invoked_du+"."+invoked_function)
 			Encode data (in the post of the https call)
 		Launch the request
 		Receive response
@@ -280,21 +308,40 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 			print("Alarm not created due to the existence redeployment files.")
 
 
-	print("=====AGENT: /REMOTE_INVOKE=====")
+	print("=====AGENT: OUTGOING_INVOKE=====")
 	print("Thread ID: ", threading.get_ident())
 
-	# Invoked_du is a list of the DUs that implement the function, but due to latest implementations, it only contains one item
-	remote_du = invoked_du[0]
+	# Get items from the dict
+	try:
+		invoked_du 			= invocation_dict["invoked_du"]
+		invoked_function 	= invocation_dict["invoked_function"]
+		invoker_function 	= invocation_dict["invoker_function"]
+		params 				= invocation_dict["params"]
+	except:
+		raise Exception("Keys missing")
 
-	if remote_du in du_list and remote_du != 'du_default':
-		print("local invocation: ",invoked_function)
-		print(invoked_du, invoked_function, invoked_data)
-		#res=eval(invoked_function)
-		print("Hago eval de: "+ invoked_du[0]+"."+invoked_function+"("+invoked_data+")")
-		if "%3d" in invoked_data:
-			invoked_data = invoked_data.replace("%3d","=")
-		res = eval(invoked_du[0]+"."+invoked_function+"("+invoked_data+")")
-		print("Responde: ", res)
+	print("Invocation dictionary:", "\n", 				\
+		"  invoked_du", invoked_du, "\n", 				\
+		"  invoked_function", invoked_function, "\n", 	\
+		"  invoker_function", invoker_function, "\n", 	\
+		"  params", params, "\n"						\
+		)
+
+	# Check parameters
+	assert invoked_du is not None 			# Must exist
+	assert invoked_function is not None 	# Must exist
+	assert params is not None 				# Must exist
+	assert params["args"] is not None 		# Must exist, may be empty list
+	assert params["kwargs"] is not None 	# Must exist, may be empty dictionary
+
+	# If the du is in this agent, then it is a local invocation
+	if invoked_du in du_list and invoked_du != 'du_default':
+		print("===AGENT: LOCAL INVOCATION===")
+
+		command_to_eval = invoked_du + "." + invoked_function + "(*params['args'], **params['kwargs'])"
+		print("Command to evaluate is:\t", command_to_eval)
+		eval_result = eval(command_to_eval)
+		print("Response:", eval_result)
 
 		# Queue data stats
 		stats_data = {}
@@ -303,13 +350,14 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 		mp_stats_queue.put(stats_data)
 
 		try:
-			return eval(res)
+			return eval(eval_result)
 		except:
-			return res
+			return eval_result
 
+	# If the du is not in the agent
 	# Get the possible agents to invoke
 	global my_agent_ID
-	list_agents = list(cloudbook_dict_agents.get(remote_du)) # Agents containing the DU that has the function to invoke
+	list_agents = list(cloudbook_dict_agents.get(invoked_du)) # Agents containing the DU that has the function to invoke
 
 	# Get the version of the cloudbook in order to check for changes
 	invocation_cloudbook_version = cloudbook_version
@@ -337,53 +385,37 @@ def outgoing_invoke(invoked_du, invoked_function, invoked_data, invoker_function
 			raise e 	# This should never happen
 
 		try:
-			#if invoker_function == None:
-			#	url = 'http://'+desired_host_ip_port+"/invoke?invoked_function="+remote_du+"."+invoked_function
-			#else:
-			#	url = 'http://'+desired_host_ip_port+"/invoke?invoked_function="+remote_du+"."+invoked_function+"&invoker_function="+invoker_function
-			#print(url)
-
 			url = "http://"+desired_host_ip_port+"/invoke"
-			print(url)
 
-			print("Invoked data:", invoked_data)
-			dict_to_send = {\
-				"invoked_du":remote_du,\
-				"invoked_function":invoked_function,\
-				"invoker_function":invoker_function,\
-				"invoked_data":invoked_data\
-				#"params":"NOT_SUPPORTED YET"\
-				}
-			
-			print("dict_to_send:", dict_to_send)
-			dict_to_send_json = json.dumps(dict_to_send).encode('utf8')
-			request_object = urllib.request.Request(url, data=dict_to_send_json, headers={'content-type': 'application/json'})
-			print("Request launched:", url)
+			invocation_dict_json = json.dumps(invocation_dict).encode('utf8')
+			print("Launching request to:", url, "with json:", invocation_dict_json)
+			request_object = urllib.request.Request(url, data=invocation_dict_json, headers={'content-type': 'application/json'})
 			r = urllib.request.urlopen(request_object)
 			break
+
 		except Exception as e:
 			print("URL was not answered by " + remote_agent + " (IP:port --> " + desired_host_ip_port + ")")
 			write_alarm("WARNING")
 
 			if remote_agent == last_agent: 	# If all agents have been tested
 				print("No agents available to execute the requested function.")
-				if is_critical(remote_du): 	# If the du is critical
-					print("The function that could not be invoked is in a critical du: ", remote_du + "." + invoked_function)
+				if is_critical(invoked_du): 	# If the du is critical
+					print("The function that could not be invoked is in a critical du: ", invoked_du + "." + invoked_function)
 					write_alarm("CRITICAL")
 					while True:
 						time.sleep(1)
 						print("This agent has detected a problem and will be automatically restarted.")
 					# raise BaseException(CRIT_ERR_NO_ANSWER)
 				else: 	# If the du is NOT critical
-					print("The function that could not be invoked is in a NON-critical du: ", remote_du + "." + invoked_function)
+					print("The function that could not be invoked is in a NON-critical du: ", invoked_du + "." + invoked_function)
 					
 					# Wait until new cloudbook version is charged
 					while invocation_cloudbook_version == cloudbook_version:
-						print("Waiting for redeployment to reallocate " + remote_du + " in an accessible agent.")
+						print("Waiting for redeployment to reallocate " + invoked_du + " in an accessible agent.")
 						time.sleep(1)
 					
 					# Refresh the variables after the hot redeployment in order to try again
-					list_agents = list(cloudbook_dict_agents.get(remote_du))
+					list_agents = list(cloudbook_dict_agents.get(invoked_du))
 					invocation_cloudbook_version = cloudbook_version
 					invocation_agents_grant = agents_grant
 					invocation_agents_list = list_agents[round_robin_index:len(list_agents)] + list_agents[0:round_robin_index]

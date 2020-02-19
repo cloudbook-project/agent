@@ -7,7 +7,7 @@ import socket
 
 # Multi thread/process
 import time
-import threading, queue
+import threading
 from multiprocessing import Process, Queue, Value, Array
 import signal
 
@@ -472,12 +472,12 @@ def value2grant(val_var):
 def __CLOUDBOOK__():
 	programmer_accessible_dict = {}
 	programmer_accessible_dict["agent"] = {}
-	#programmer_accessible_dict["agent"]["grant"] = value2grant(NOMBRE_DE_LA_VARIABLE_VALUE_DE_GRANT)#####################################################
-	#programmer_accessible_dict["agent"]["IP"] = array2string(NOMBRE_DE_LA_VARIABLE_ARRAY_DE_IP)##########################################################
+	programmer_accessible_dict["agent"]["grant"] = value2grant(value_var_grant)
+	programmer_accessible_dict["agent"]["ip"] = array2string(array_var_ip)
+	programmer_accessible_dict["agent"]["port"] = array2string(array_var_port)
 	programmer_accessible_dict["agent"]["id"] = my_agent_ID
 
 	programmer_accessible_dict["circle"] = {}
-	#programmer_accessible_dict["circle"]["num_agents_with_dus"] = len(XXXXXXXXXXXXXXXXXXX)###############################################################
 	programmer_accessible_dict["circle"]["num_available_agents"] = len(agents_grant)
 	programmer_accessible_dict["circle"]["agents_grant"] = agents_grant # dict(Keys: agent ids. Values: dicts(Keys: "GRANT", "IP" and "PORT". Values:...))
 
@@ -578,10 +578,16 @@ def flaskThreaded(port, sock=None):
 # 	Si hay hot_redeploy: 
 # 		Recarga diccionarios (cloudbook_dict_agents, agents_grant)
 # 		Aumenta cloudbook_version
-def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue_param, stdin_stream):
+def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue_param, stdin_stream, value_var_grant_param, array_var_ip_param, array_var_port_param):
 	print("Flask Process is now active")
 	global mp_stats_queue
 	mp_stats_queue = mp_stats_queue_param
+	global value_var_grant
+	value_var_grant = value_var_grant_param
+	global array_var_ip
+	array_var_ip = array_var_ip_param
+	global array_var_port
+	array_var_port = array_var_port_param
 	# NOT USED globals: configjson_dict, agent_config_dict
 	# NOT MODIFIED globals: cloudbook_path, round_robin_index
 
@@ -771,6 +777,7 @@ def create_stats(t1):
 # (a port collision), restarts the FlaskProcess.
 def init_flask_process_and_check_ok(cold_redeploy):
 	global my_agent_ID, my_project_name, fs_path, start_port_search, mp_flask2agent_queue, mp_agent2flask_queue, flask_proc
+	global array_var_ip, array_var_port, value_var_grant
 	# Create the init_info_item for FlaskProcess
 	# {"init_info": {"my_agent_ID": my_agent_ID, "my_project_name": my_project_name, "fs_path": fs_path, 
 	#				"start_port_search": start_port_search}}
@@ -828,7 +835,7 @@ def init_flask_process_and_check_ok(cold_redeploy):
 
 					# Terminate and create a new FlaskProcess
 					flask_proc.terminate()
-					flask_proc = Process(target=flaskProcessFunction, args=(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue, stdin_stream))
+					flask_proc = Process(target=flaskProcessFunction, args=(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue, stdin_stream, value_var_grant, array_var_ip, array_var_port))
 					flask_proc.start()
 
 					# Pass initial info and launch
@@ -980,13 +987,20 @@ if __name__ == "__main__":
 		print ("option -project_folder missing")
 		sys.exit(1)
 
+	# Create multiprocessing Values and Arrays
+	value_var_grant = Value("i", 0) 		# Value (integer with initial value 0) sharable by processes
+	array_var_ip = Array('c', range(15))	# Array (characters) sharable by processes. IP length is at most 4 3-digit numbers and 3 dots
+	string2array("", array_var_ip)
+	array_var_port = Array('c', range(5))	# Array (characters) sharable by processes. Port length is at most a 5-digit number
+	string2array("", array_var_port)
+
 	# Load agent config file
 	project_path = cloudbook_path + os.sep + my_project_name
 	agent_config_dict = loader.load_dictionary(project_path + os.sep + "agents" + os.sep + "config_"+agent_id+".json")
 
 	my_agent_ID = agent_config_dict["AGENT_ID"]
 	fs_path = agent_config_dict["DISTRIBUTED_FS"]
-	my_grant = agent_config_dict["GRANT_LEVEL"]
+	grant2value(agent_config_dict["GRANT_LEVEL"], value_var_grant)
 
 	# Load circle config file
 	configjson_dict = loader.load_dictionary(fs_path + os.sep + "config.json")
@@ -1005,7 +1019,7 @@ if __name__ == "__main__":
 	settings_string += "The agent has the following configuration:\n"
 	settings_string += "  - ID: " + my_agent_ID + "\n"
 	settings_string += "  - Project: " + my_project_name + "\n"
-	settings_string += "  - Grant: " + my_grant + "\n"
+	settings_string += "  - Grant: " + value2grant(value_var_grant) + "\n"
 	settings_string += "  - FSPath: " + fs_path + "\n"
 	settings_string += "  - Stats creation period: " + str(agent_stats_interval) + "\n"
 	settings_string += "  - Grant file creation period: " + str(agent_grant_interval) + "\n"
@@ -1021,7 +1035,7 @@ if __name__ == "__main__":
 	mp_stats_queue = Queue()
 
 	# Launch the FlaskProcess
-	flask_proc = Process(target=flaskProcessFunction, args=(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue, stdin_stream))
+	flask_proc = Process(target=flaskProcessFunction, args=(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue, stdin_stream, value_var_grant, array_var_ip, array_var_port))
 	flask_proc.start()
 
 	# Launch the stats file creator thread
@@ -1055,10 +1069,13 @@ if __name__ == "__main__":
 	if lan_mode:
 		port = local_port
 
+	string2array(ip, array_var_ip)
+	string2array(str(port), array_var_port)
+
 	# Create and fill dictionary with initial data
 	grant_dictionary = {}
 	grant_dictionary[my_agent_ID] = {}
-	grant_dictionary[my_agent_ID]["GRANT"] = my_grant
+	grant_dictionary[my_agent_ID]["GRANT"] = value2grant(value_var_grant)
 	grant_dictionary[my_agent_ID]["IP"] = ip
 	grant_dictionary[my_agent_ID]["PORT"] = port
 
@@ -1117,21 +1134,18 @@ if __name__ == "__main__":
 
 	# Forever loop (check grant modifications, write grant_XX_file, check and handle redeploy requests)
 	time_start = time.monotonic()
-	grant = None
 	while True:
-		current_time = time.monotonic()
-
 		# Load agent config file and update grant. Note: fspath changes are not taken into account while executing
 		dict_for_grant_check = loader.load_dictionary(project_path + os.sep + "agents" + os.sep + "config_"+my_agent_ID+".json")
 		grant_in_file = dict_for_grant_check["GRANT_LEVEL"]
 
-		if grant_in_file!=my_grant:
-			my_grant = grant_in_file
-			print("New grant has been configured:", my_grant)
-
+		if grant_in_file!=value2grant(value_var_grant):
+			grant2value(grant_in_file, value_var_grant)
+			grant_dictionary[my_agent_ID]["GRANT"] = value2grant(value_var_grant)
+			print("New grant has been configured:", value2grant(value_var_grant))
 
 		# When the the interval time expires
-		if current_time-time_start >= agent_grant_interval:
+		if time.monotonic()-time_start >= agent_grant_interval:
 			time_start += agent_grant_interval
 
 			# Check if there are redeployment files
@@ -1174,19 +1188,14 @@ if __name__ == "__main__":
 				after_launch_info_item["after_launch_info"]["agents_grant"] = agents_grant
 				mp_agent2flask_queue.put(after_launch_info_item)
 
-			# Update dictionary with new data (grant)
-			if grant!= None:
-				grant_dictionary[my_agent_ID]["GRANT"] = grant
-
 			# Update also IP/port ??? --> call get_ip_info() again and update if necessary
 			#grant_dictionary[my_agent_ID]["IP"] = ip
 			#grant_dictionary[my_agent_ID]["PORT"] = port
 
-			# Write dictionary in "agent_X_grant.json" and read dictionary from "agents_grant.json"
+			# Write dictionary in "agent_X_grant.json" to communicate changes and prove agent is alive
 			write_agent_X_grant_file()
-			grant = None
 
-		# Wait 1 second to look for more data in the queue
+		# Wait 1 second before next iteration in the loop
 		time.sleep(1)
 
 	print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")

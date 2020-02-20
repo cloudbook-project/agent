@@ -126,13 +126,17 @@ def print(*args, **kwargs):
 
 #####   APPLICATION TO SEND AND RECEIVE FUNCTION REQUESTS   #####
 
+# Global variable that stores the Flask app (used in the decorators)
 application = Flask(__name__)
 
+# This function is only for testing purposes. Returns "Hello"
 @application.route("/", methods=['GET', 'PUT', 'POST'])
 def hello():
 	print("Hello world")
 	return "Hello"
 
+
+# This function returns a concatenaion of the project and agent_id which is running the server
 @application.route("/get_project_agent_id", methods=['GET', 'PUT', 'POST'])
 def get_project_agent_id():
 	print("/get_project_agent_id route has been invoked.")
@@ -147,21 +151,9 @@ def get_project_agent_id():
 # 	return "Quitting..."
 
 
+# This function receives and executes invocations from other agents. Requires a json dictionary with the information to invoke the function.
 @application.route("/invoke", methods=['GET','POST'])
 def invoke(configuration = None):
-	'''
-	This function receives petitions from other Agents or the run command
-	This function is invoked through http like this: http://138.4.7.151:5000/invoke?invoked_function=du_0.main
-	The invocation contains:
-		-GET: the invoked function
-		-POST: the invoked data
-	This function:
-		Gets the atributes invoked function and data
-		Gets the du and the function name
-		Evaluate the function if the du belong to the agent
-			Check: This always happens.
-		Returns the result of the evaluation
-	'''
 	global du_list
 	global my_agent_ID
 	global stats_dict
@@ -273,28 +265,10 @@ def invoke(configuration = None):
 	return eval_result if eval_result is not None else ""
 
 
+# This function replaces the "invoker" function of each du and allows to send invoke requests to other agents (or invoke itself if possible).
+# Requires a dictionary with the information to invoke the function.
 def outgoing_invoke(invocation_dict, configuration = None):
 	global round_robin_index
-	'''
-	This function is the one that calls the functions that do not belong to the agent's dus
-	This is because the exec(du+".invoker=remote_invoke") statement in the main process of every agent
-		being invoker an object generated in every du+
-	The invocation contains its variables in the invocation inside the du (example: invoker(['du_1'],'compute_body',str(i)+','+str(j)))
-	This function:
-		Gets the du to which the function belongs
-			If its in a du that belongs to the agent, it will resolv the function locally. Check: This never happens
-		Check the list of agents in order to get the agent to invoke (this could be many)
-		Build the call
-			Gets the host (TODO: Cache the ip)
-			Build the url (in order the invoke function from the other agent understands it: 
-				url='http://'+host+"/invoke?invoked_function="+invoked_du+"."+invoked_function)
-			Encode data (in the post of the https call)
-		Launch the request
-		Receive response
-			TODO: Test better the decoding of the response, actually makes a try except block diferenciating if the function response a
-				JSON object or other type like a string
-		The function returns the data received as response (That data is the resul of the invoke function in the other agent)
-	'''
 
 	# Internal function to write alarms (files). Parameter is the importance level (the alarm file name)
 	def write_alarm(alarm_name):
@@ -307,7 +281,6 @@ def outgoing_invoke(invocation_dict, configuration = None):
 			print(alarm_name, " alarm file has been created.")
 		else:
 			print("Alarm not created due to the existence redeployment files.")
-
 
 	print("=====AGENT: OUTGOING_INVOKE=====")
 	print("Thread ID: ", threading.get_ident())
@@ -444,16 +417,7 @@ def outgoing_invoke(invocation_dict, configuration = None):
 
 
 
-#####   AGENT FUNCTIONS   #####
-
-# Function handler of the Ctrl+C event
-def sigint_handler(*args):
-	try:
-		flask_proc.terminate()
-	except Exception as e:
-		pass
-	os._exit(0)
-
+#####   ARRAYS AND VALUES HANDLING AND TRANSFORMATION FUNCTIONS   #####
 
 # This function puts a string into a multiprocesssing array and fills the extra array slots with "\x00".
 # Note: internally converts the string into an array of binary utf-8 encoded characters.
@@ -476,29 +440,50 @@ def array2string(arr_var):
 		return arr_var.value.decode("utf-8")
 
 
-# This function takes the grant string and puts it in a multiprocessing value.
-# Note: internally converts the grant string into a number.
-def grant2value(grant, val_var):
+# This function takes a grant string and returns it transformed into a number.
+def grant2num(grant):
 	if grant=="LOW":
-		val_var.value = 1
-	elif grant=="MEDIUM":
-		val_var.value = 2
-	elif grant=="HIGH":
-		val_var.value = 3
-	else:
-		val_var.value = 0
+		return 1
+	if grant=="MEDIUM":
+		return 2
+	if grant=="HIGH":
+		return 3
+	return 0
 
-# This function takes the value form a multiprocessing value and returns it as a string.
-# Note: internally converts the number back to string.
-def value2grant(val_var):
-	number = val_var.value
-	if number==1:
+
+# This function takes a number and returns it transformed into a grant string.
+def num2grant(num):
+	if num==1:
 		return "LOW"
-	if number==2:
+	if num==2:
 		return "MEDIUM"
-	if number==3:
+	if num==3:
 		return "HIGH"
 	return ""
+
+
+# This function takes a number and puts it into a multiprocessing value.
+def num2value(num, val_var):
+	with val_var.get_lock():
+		val_var.value = num
+
+
+# This function takes a multiprocessing value and returns its value as number.
+def value2num(val_var):
+	with val_var.get_lock():
+		return val_var.value
+
+
+
+#####   AGENT FUNCTIONS   #####
+
+# Function handler of the Ctrl+C event
+def sigint_handler(*args):
+	try:
+		flask_proc.terminate()
+	except Exception as e:
+		pass
+	os._exit(0)
 
 
 # This function returns a dictionary containing all the information of the agent and circle that may be useful for a programmer
@@ -506,14 +491,14 @@ def value2grant(val_var):
 def __CLOUDBOOK__():
 	programmer_accessible_dict = {}
 	programmer_accessible_dict["agent"] = {}
-	programmer_accessible_dict["agent"]["grant"] = value2grant(value_var_grant)
+	programmer_accessible_dict["agent"]["grant"] = num2grant(value2num(value_var_grant))
 	programmer_accessible_dict["agent"]["ip"] = array2string(array_var_ip)
-	programmer_accessible_dict["agent"]["port"] = array2string(array_var_port)
+	programmer_accessible_dict["agent"]["port"] = value2num(value_var_port)
 	programmer_accessible_dict["agent"]["id"] = my_agent_ID
 
 	programmer_accessible_dict["circle"] = {}
 	programmer_accessible_dict["circle"]["num_available_agents"] = len(agents_grant)
-	programmer_accessible_dict["circle"]["agents_grant"] = agents_grant # dict(Keys: agent ids. Values: dicts(Keys: "GRANT", "IP" and "PORT". Values:...))
+	programmer_accessible_dict["circle"]["agents_grant"] = agents_grant # dict(Keys: agent ids. Values: dicts(Keys: "GRANT", "IP" and "PORT"))
 
 	return programmer_accessible_dict
 
@@ -587,7 +572,8 @@ def flaskThreaded(port, sock=None):
 	# first_launch = False
 	print("00000000000000000000000000000000000000000000000000000000000000000000000000")
 
-# This function is used in a new process and coordinates the queues for loading data and the DUs to allow Flask execution.
+
+# This function is used in a new process. It is in charge of handling the queues for data exchange (and load DUs) to allow Flask execution.
 # Espera para siempre mirando mp_agent2flask_queue cada 1 segundo:
 # 	Si hay init_info:
 # 		Carga la info
@@ -612,7 +598,8 @@ def flaskThreaded(port, sock=None):
 # 	Si hay hot_redeploy: 
 # 		Recarga diccionarios (cloudbook_dict_agents, agents_grant)
 # 		Aumenta cloudbook_version
-def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue_param, stdin_stream, value_var_grant_param, array_var_ip_param, array_var_port_param):
+def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue_param,\
+						stdin_stream, value_var_grant_param, array_var_ip_param, value_var_port_param):
 	print("Flask Process is now active")
 	global mp_stats_queue
 	mp_stats_queue = mp_stats_queue_param
@@ -620,8 +607,8 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 	value_var_grant = value_var_grant_param
 	global array_var_ip
 	array_var_ip = array_var_ip_param
-	global array_var_port
-	array_var_port = array_var_port_param
+	global value_var_port
+	value_var_port = value_var_port_param
 	# NOT USED globals: configjson_dict, agent_config_dict
 	# NOT MODIFIED globals: cloudbook_path, round_robin_index
 
@@ -811,7 +798,7 @@ def create_stats(t1):
 # (a port collision), restarts the FlaskProcess.
 def init_flask_process_and_check_ok(cold_redeploy):
 	global my_agent_ID, my_project_name, fs_path, start_port_search, mp_flask2agent_queue, mp_agent2flask_queue, flask_proc
-	global array_var_ip, array_var_port, value_var_grant
+	global array_var_ip, value_var_port, value_var_grant
 	# Create the init_info_item for FlaskProcess
 	# {"init_info": {"my_agent_ID": my_agent_ID, "my_project_name": my_project_name, "fs_path": fs_path, 
 	#				"start_port_search": start_port_search}}
@@ -869,7 +856,9 @@ def init_flask_process_and_check_ok(cold_redeploy):
 
 					# Terminate and create a new FlaskProcess
 					flask_proc.terminate()
-					flask_proc = Process(target=flaskProcessFunction, args=(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue, stdin_stream, value_var_grant, array_var_ip, array_var_port))
+					proc_args = (mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue,\
+								 stdin_stream, value_var_grant, array_var_ip, value_var_port)
+					flask_proc = Process(target=flaskProcessFunction, args=proc_args)
 					flask_proc.start()
 
 					# Pass initial info and launch
@@ -892,21 +881,6 @@ def init_flask_process_and_check_ok(cold_redeploy):
 		return local_port
 	else:
 		raise Exception(GEN_ERR_INIT_CHECK_FLASK)
-
-
-# This function checks if the port passed as parameter is available or in use, trying to bind that port to a socket. Then, the socket is
-# closed and the result (true/false) is returned.
-# def check_port_available(port):
-# 	sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-# 	available = False
-# 	try:
-# 		sock.bind(("0.0.0.0", port))
-# 		print("Port " + str(port) + " is available.")
-# 		available = True
-# 	except:
-# 		print("Port " + str(port) + " is in use.")
-# 	sock.close()
-# 	return available
 
 
 # This function finds the first port available strating from the port given as parameter onwards. Returns the port and the
@@ -1025,8 +999,8 @@ if __name__ == "__main__":
 	value_var_grant = Value("i", 0) 		# Value (integer with initial value 0) sharable by processes
 	array_var_ip = Array('c', range(15))	# Array (characters) sharable by processes. IP length is at most 4 3-digit numbers and 3 dots
 	string2array("", array_var_ip)
-	array_var_port = Array('c', range(5))	# Array (characters) sharable by processes. Port length is at most a 5-digit number
-	string2array("", array_var_port)
+	value_var_port = Value("i", 0) 			# Value (integer with initial value 0) sharable by processes
+
 
 	# Load agent config file
 	project_path = cloudbook_path + os.sep + my_project_name
@@ -1034,7 +1008,7 @@ if __name__ == "__main__":
 
 	my_agent_ID = agent_config_dict["AGENT_ID"]
 	fs_path = agent_config_dict["DISTRIBUTED_FS"]
-	grant2value(agent_config_dict["GRANT_LEVEL"], value_var_grant)
+	num2value(grant2num(agent_config_dict["GRANT_LEVEL"]), value_var_grant)
 
 	# Load circle config file
 	configjson_dict = loader.load_dictionary(fs_path + os.sep + "config.json")
@@ -1053,7 +1027,7 @@ if __name__ == "__main__":
 	settings_string += "The agent has the following configuration:\n"
 	settings_string += "  - ID: " + my_agent_ID + "\n"
 	settings_string += "  - Project: " + my_project_name + "\n"
-	settings_string += "  - Grant: " + value2grant(value_var_grant) + "\n"
+	settings_string += "  - Grant: " + num2grant(value2num(value_var_grant)) + "\n"
 	settings_string += "  - FSPath: " + fs_path + "\n"
 	settings_string += "  - Stats creation period: " + str(agent_stats_interval) + "\n"
 	settings_string += "  - Grant file creation period: " + str(agent_grant_interval) + "\n"
@@ -1069,7 +1043,9 @@ if __name__ == "__main__":
 	mp_stats_queue = Queue()
 
 	# Launch the FlaskProcess
-	flask_proc = Process(target=flaskProcessFunction, args=(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue, stdin_stream, value_var_grant, array_var_ip, array_var_port))
+	proc_args = (mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue,\
+				 stdin_stream, value_var_grant, array_var_ip, value_var_port)
+	flask_proc = Process(target=flaskProcessFunction, args=proc_args)
 	flask_proc.start()
 
 	# Launch the stats file creator thread
@@ -1104,12 +1080,12 @@ if __name__ == "__main__":
 		port = local_port
 
 	string2array(ip, array_var_ip)
-	string2array(str(port), array_var_port)
+	num2value(port, value_var_port)
 
 	# Create and fill dictionary with initial data
 	grant_dictionary = {}
 	grant_dictionary[my_agent_ID] = {}
-	grant_dictionary[my_agent_ID]["GRANT"] = value2grant(value_var_grant)
+	grant_dictionary[my_agent_ID]["GRANT"] = num2grant(value2num(value_var_grant))
 	grant_dictionary[my_agent_ID]["IP"] = ip
 	grant_dictionary[my_agent_ID]["PORT"] = port
 
@@ -1173,10 +1149,10 @@ if __name__ == "__main__":
 		dict_for_grant_check = loader.load_dictionary(project_path + os.sep + "agents" + os.sep + "config_"+my_agent_ID+".json")
 		grant_in_file = dict_for_grant_check["GRANT_LEVEL"]
 
-		if grant_in_file!=value2grant(value_var_grant):
-			grant2value(grant_in_file, value_var_grant)
-			grant_dictionary[my_agent_ID]["GRANT"] = value2grant(value_var_grant)
-			print("New grant has been configured:", value2grant(value_var_grant))
+		if grant_in_file!=num2grant(value2num(value_var_grant)):
+			num2value(grant2num(grant_in_file), value_var_grant)
+			grant_dictionary[my_agent_ID]["GRANT"] = num2grant(value2num(value_var_grant))
+			print("New grant has been configured:", num2grant(value2num(value_var_grant)))
 
 		# When the the interval time expires
 		if time.monotonic()-time_start >= agent_grant_interval:

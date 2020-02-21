@@ -262,7 +262,7 @@ def invoke(configuration = None):
 		print("This function does not belong to this agent.")
 		eval_result = "none"
 
-	return eval_result if eval_result is not None else ""
+	return eval_result
 
 
 # This function replaces the "invoker" function of each du and allows to send invoke requests to other agents (or invoke itself if possible).
@@ -405,14 +405,14 @@ def outgoing_invoke(invocation_dict, configuration = None):
 	# end_of_while
 		
 	# If the loop finishes with break, then a response has been received and this invocation and function finishes normally.
-	print("Response received")
+	readed_response = r.read()
+	print("Response received:", readed_response)
 
 	try: 		# For functions that return some json
-		data = r.read().decode()
+		data = readed_response.decode()
 		aux = eval(data)
 	except: 	# For other data types
-		data = r.read()
-		aux = data
+		aux = readed_response
 	return aux
 
 

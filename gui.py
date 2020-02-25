@@ -48,7 +48,7 @@ COMMAND_SYNTAX = "\
  ____________________________________________________________________________________________________________ \n\
 |                                                                                                            |\n\
 | SYNTAX:                                                                                                    |\n\
-|   gui.py [-verbose] [-log]                                                                                 |\n\
+|   gui.py [-verbose] [-log] [-help|-syntax|-info]                                                           |\n\
 |                                                                                                            |\n\
 | EXAMPLE:                                                                                                   |\n\
 |   gui.py -verbose                                                                                          |\n\
@@ -596,7 +596,8 @@ if __name__ == '__main__':
 				log_to_file = True
 				continue
 	except Exception as e:
-		print("\nThe syntax is not correct. Use: gui.py [-verbose] [-log].\n")
+		print("The syntax is not correct. Use:")
+		print("  gui.py [-verbose] [-log] [-help|-syntax|-info]")
 		print("For more info type 'gui.py -help'")
 		os._exit(1)
 

@@ -111,7 +111,7 @@ COMMAND_SYNTAX = "\
  ____________________________________________________________________________________________________________ \n\
 |                                                                                                            |\n\
 | SYNTAX:                                                                                                    |\n\
-|   agent.py -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-log]                         |\n\
+|   agent.py -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-log] [-help|-syntax|-info]   |\n\
 |                                                                                                            |\n\
 | EXAMPLE:                                                                                                   |\n\
 |   agent.py -agent_id agent_S4MY6ZGKQRT8RTVWLJZP -project_folder NBody -log                                 |\n\
@@ -1064,7 +1064,6 @@ if __name__ == "__main__":
 			if skip:
 				skip = False
 				continue
-			#print("analyzing:", args[i])
 			if args[i]=="-agent_id":
 				agent_file = args[i+1]
 				skip = True
@@ -1080,7 +1079,8 @@ if __name__ == "__main__":
 				log_to_file = True
 				continue
 	except Exception as e:
-		print("\nThe syntax is not correct. Use: agent.py -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-log].\n")
+		print("The syntax is not correct. Use:")
+		print("  agent.py -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-log] [-help|-syntax|-info]")
 		print("For more info type 'agent.py -help'")
 		os._exit(1)
 

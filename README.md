@@ -13,12 +13,12 @@ The Cloudbook agent component runs in each of the machines of a project and it i
 	- pynat
 	- urllib
 
-###### Note: any extra library that has to be imported in the code to execute, must be installed previously in the machine (i.e. if you want to run a game that uses pygame you have to install it previousy in each agent machine)
+_Note: any extra library that has to be imported in the code to execute, must be installed previously in the machine (i.e. if you want to run a game that uses pygame you have to install it previousy in each agent machine)_
 
 
 ### Features
 
-Currently, the Agent is capable of performing the following tasks:
+The Agent is capable of performing the following tasks:
 - Configure itself with the corresponding files: the project configuration file (./distributed/config.json) and its own (./agents/config_agent_XX.json).
 - Stay idle until the deployer indicates the DUs to load (./distributed/cloudbook.json) and then load the required DUs overwriting their invoke function for an agent function that knows the IPs and ports  of the agents (obtained reading the file ./distributed/agents_grant.json) to be able to send requests to them.
 - Launch an http server to allow receiving requests from other agents.
@@ -33,12 +33,12 @@ Currently, the Agent is capable of performing the following tasks:
 Despite the fact that the graphical interface has been developed thinking on the ease of use, some instructions and advices are included here in order to help those who do not know how cloudbook works.
 
 * Launching the GUI:
-	- Option A)
+	* Option A)
 		1. Double-click the "gui.py" file.
-	- Option B)
+	* Option B)
 		1. Open a cmd or shell window.
 		2. Navigate to the cloudbook agent folder (the cloned/downloaded repository)
-		3. Type `python gui.py` and press enter.
+		3. Type `python gui.py` and press enter.  (For more info type `gui.py -help`)
 
 * Creating agents with the GUI:
 	1. Select the project tab in which you want create the agent.
@@ -59,11 +59,34 @@ Despite the fact that the graphical interface has been developed thinking on the
 	3. As when creating the agent, select the new Grant and/or folder of the distributed filesystem. Note: it is possible to edit one or both parameters at the same time.
 	4. Finally click on the "Save changes" button.
 
+_Important note: the GUI is the most recommended method to control the agent for any action (create, launch, stop or delete)._
 
-###### Important note: the GUI is the most recommended method to control the agent for any action (create, launch, stop or delete). However, it is possible to create them manually writing the specific file or to launch them by console or command line. In the case you launch an agent through the console, it can be closed with Ctrl+C, but if the program does not leave in normal conditions it may leave a subprocess open due to the design (and those have to be closed manually from task manager or similar).
 
-* Launching agent with the terminal/command line:
-	`python agent.py -agent_id <agent_id> -project_folder <project_folder>`  
+### ADVANCED USE (using the console)
 
-	Example:  
-	`python agent.py -agent_id agent_0 -project_folder NBody`  
+It is possible to launch the GUI and the agent through a console command, which admits parameters to modify the default behaviour of these. Here is a small manual for this use. **This is only recommended for developers or advanced users**.
+
+* The GUI has the following console syntax:
+	`gui.py [-verbose] [-log] [-help|-syntax|-info]`
+	Example: `gui.py -verbose`
+	Options:
+	* _Optional_:
+		**-verbose**: This option will make the agents print cloudbook information.
+		**-log**: this option will make the agents create a log with cloudbook info.
+		**-help, -syntax, -info**: this option will print this help and syntax info and terminate.
+
+
+* The agent has the following console syntax:
+	`agent.py -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-log] [-help|-syntax|-info]`
+	Example: `agent.py -agent_id agent_S4MY6ZGKQRT8RTVWLJZP -project_folder NBody -log`
+	Options:
+	* _Mandatory_:
+		**-agent_id `<agent_id>`**: this option is used to specify the name of the agent to launch.
+		**-project_folder `<project_folder>`**: this option is used to specify the name of the folder containing the agent.
+	* _Optional_:
+		**-verbose**: this option will make the agent print cloudbook information.
+		**-log**: this option will make the agent create a log with cloudbook info.
+		**-help, -syntax, -info**: this option will print this help and syntax info and terminate.
+
+_Note: the order of the options is not relevant in any of the programs._
+_Note 2: it is possible to do all tasks using the command line, though, this is not recommended because if the program leaves in abnormal conditions the agent may leave open subprocesses (which have to be closed manually with the task manager or similar)._

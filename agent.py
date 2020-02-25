@@ -1037,7 +1037,7 @@ if __name__ == "__main__":
 
 	#####################################
 	# Program name is not parameter
-	args = sys.argv
+	args = sys.argv[:]
 	args.pop(0)
 	#print("Arguments:", args, "\n")
 
@@ -1105,6 +1105,9 @@ if __name__ == "__main__":
 	my_agent_ID = agent_config_dict["AGENT_ID"]
 	fs_path = agent_config_dict["DISTRIBUTED_FS"]
 	num2value(grant2num(agent_config_dict["GRANT_LEVEL"]), value_var_grant)
+
+	# Change working directory
+	os.chdir(fs_path + os.sep + "working_dir")
 
 	# Load circle config file
 	configjson_dict = loader.load_dictionary(fs_path + os.sep + "config.json")

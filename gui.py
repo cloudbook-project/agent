@@ -19,6 +19,9 @@ import json
 # Project specific
 import agent				# In project directory
 
+# Basic
+import builtins
+
 
 
 #####   GLOBAL VARIABLES   #####
@@ -71,7 +74,7 @@ def print(*args, **kwargs):
 		return
 
 	if verbose:
-		builtins.print("__GUI__:", *args, **kwargs)
+		builtins.print("___ Agent GUI ___:", *args, **kwargs)
 	else:
 		pass
 
@@ -156,7 +159,7 @@ def kill_process(proc):
 		# proc.kill()
 		kill_tree_command = "TASKKILL /F /T /PID "+str(proc.pid)
 		if not verbose:
-			kill_tree_command += " > NUL"
+			kill_tree_command += " > NUL 2>&1"
 		os.system(kill_tree_command)	
 	else:
 		os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
@@ -575,7 +578,7 @@ class Application(ttk.Frame):
 #####   GUI MAIN   #####
 if __name__ == '__main__':
 	# Program name is not parameter
-	args = sys.argv
+	args = sys.argv[:]
 	args.pop(0)
 
 	# Check if user asks for help

@@ -32,6 +32,49 @@ if(platform.system()=="Windows"):
 else:
 	cloudbook_path = os.environ['HOME'] + os.sep + "cloudbook"
 
+# Indicator of verbosity or silent mode
+verbose = False
+
+# Indicator of logginng level (to file)
+log_to_file = False
+
+
+
+#####   CONSTANTS   #####
+COMMAND_SYNTAX = "\
+ ____________________________________________________________________________________________________________ \n\
+|                                                                                                            |\n\
+| SYNTAX:                                                                                                    |\n\
+|   gui.py [-verbose] [-log]                                                                                 |\n\
+|                                                                                                            |\n\
+| EXAMPLE:                                                                                                   |\n\
+|   gui.py -verbose                                                                                          |\n\
+|                                                                                                            |\n\
+| OPTIONS:                                                                                                   |\n\
+|   Optional:                                                                                                |\n\
+|     -verbose                            This option will make the agents print cloudbook information.      |\n\
+|     -log                                This option will make the agents create a log with cloudbook info. |\n\
+|     -help, -syntax, -info               This option will print this help and syntax info and terminate.    |\n\
+|                                                                                                            |\n\
+| Note: the order of the options is not relevant.                                                            |\n\
+|____________________________________________________________________________________________________________|"
+
+
+
+#####   OVERLOAD BUILT-IN FUNCTIONS   #####
+
+# Print function overloaded in order to make it print the id before anything and keep track of the traces of each agent easier.
+def print(*args, **kwargs):
+	# If the print is just a separation, i.e.:  print()  keep it like that
+	if len(args)==1 and len(kwargs)==0 and args[0]=='':
+		builtins.print()
+		return
+
+	if verbose:
+		builtins.print("__GUI__:", *args, **kwargs)
+	else:
+		pass
+
 
 
 #####   GUI FUNCTIONS   #####
@@ -112,6 +155,8 @@ def kill_process(proc):
 		# proc.send_signal(signal.CTRL_BREAK_EVENT)
 		# proc.kill()
 		kill_tree_command = "TASKKILL /F /T /PID "+str(proc.pid)
+		if not verbose:
+			kill_tree_command += " > NUL"
 		os.system(kill_tree_command)	
 	else:
 		os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
@@ -207,10 +252,20 @@ class GeneralInfoTab (ttk.Frame):
 		global projects
 		agent_id = self.agents_info[r-3]['AGENT_ID']
 		print("Launching agent", agent_id)
+
+		# Create the basic agent command (os generic)
+		agent_command = "agent.py -agent_id " + agent_id + " -project_folder " + self.project_name
+		if verbose:
+			agent_command += " -verbose"
+		if log_to_file:
+			agent_command += " -log"
+
 		if(platform.system()=="Windows"):
 			# proc = subprocess.Popen("py agent.py -agent_id " + agent_id + " -project_folder " + self.project_name, shell=True, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+			full_command = "py -3 " + agent_command
 			if agent_id=="agent_0":
-				subprocess.Popen("start \"CLOUDBOOK_interactive_cmd_("+self.project_name+")\" py -3 agent.py -agent_id " + agent_id + " -project_folder " + self.project_name, shell=True, creationflags=subprocess.CREATE_NEW_CONSOLE)
+				full_command = "start \"CLOUDBOOK_interactive_cmd_("+self.project_name+")\" " + full_command
+				subprocess.Popen(full_command, shell=True, creationflags=subprocess.CREATE_NEW_CONSOLE)
 				class Dummy:
 					def __init__(self):
 						self.pid = None
@@ -221,9 +276,10 @@ class GeneralInfoTab (ttk.Frame):
 					proc.pid = get_pid_agent_0(self.project_name)
 				#proc = subprocess.Popen("py -3 agent.py -agent_id " + agent_id + " -project_folder " + self.project_name, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
 			else:
-				proc = subprocess.Popen("py -3 agent.py -agent_id " + agent_id + " -project_folder " + self.project_name, shell=True, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+				proc = subprocess.Popen(full_command, shell=True, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
 		else:
-			proc = subprocess.Popen("python3 agent.py -agent_id " + agent_id + " -project_folder " + self.project_name, shell=True, preexec_fn=os.setsid)
+			full_command = "python3 " + agent_command
+			proc = subprocess.Popen(full_command, shell=True, preexec_fn=os.setsid)
 		projects[self.project_name]["agent_pid_dict"][agent_id] = proc
 		print("Active processes: ", projects[self.project_name]["agent_pid_dict"], "\n")
 		app.refresh()
@@ -518,6 +574,33 @@ class Application(ttk.Frame):
 
 #####   GUI MAIN   #####
 if __name__ == '__main__':
+	# Program name is not parameter
+	args = sys.argv
+	args.pop(0)
+
+	# Check if user asks for help
+	if any(i in args for i in ["-help", "-syntax", "-info"]):
+		print(COMMAND_SYNTAX)
+		os._exit(0)
+
+	# Analyze parameters
+	try:
+		for i in range(len(args)):
+			if args[i]=="-verbose":
+				verbose = True
+				continue
+			if args[i]=="-log":
+				log_to_file = True
+				continue
+	except Exception as e:
+		print("\nThe syntax is not correct. Use: gui.py [-verbose] [-log].\n")
+		print("For more info type 'gui.py -help'")
+		os._exit(1)
+
+	if verbose:
+		print("verbose:", verbose)
+		print("log:", log_to_file)
+
 	# If the system is Windows, set ID (arbitrary) to use icon also in the taskbar
 	if(platform.system()=="Windows"):
 		import ctypes

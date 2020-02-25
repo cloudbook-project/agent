@@ -28,7 +28,13 @@ import json
 my_agent_ID = None
 
 # Identifier of the project that this agent belongs to
-my_project_name = None
+my_project_folder = None
+
+# Indicator of verbosity or silent mode
+verbose = False
+
+# Indicator of logginng level (to file)
+log_to_file = False
 
 # Dictionary of agents 
 cloudbook_dict_agents = {}
@@ -101,6 +107,27 @@ ERR_GET_PROJ_ID_REFUSED = "ERROR: conection refused when FlaskProcess was trying
 requested port."
 ERR_LOAD_CRIT_DU_CLOUDBOOK_RUNNING = "ERROR: cloudbook is already running and critical dus should not be loaded at this \
 point in order to avoid unexpected behaviours due to global variables may have lost their state."
+COMMAND_SYNTAX = "\
+ ____________________________________________________________________________________________________________ \n\
+|                                                                                                            |\n\
+| SYNTAX:                                                                                                    |\n\
+|   agent.py -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-log]                         |\n\
+|                                                                                                            |\n\
+| EXAMPLE:                                                                                                   |\n\
+|   agent.py -agent_id agent_S4MY6ZGKQRT8RTVWLJZP -project_folder NBody -log                                 |\n\
+|                                                                                                            |\n\
+| OPTIONS:                                                                                                   |\n\
+|   Mandatory:                                                                                               |\n\
+|     -agent_id <agent_id>                <agent_id> is the name of the agent to launch.                     |\n\
+|     -project_folder <project_folder>    <project_folder> is the name of the folder containing the agent.   |\n\
+|                                                                                                            |\n\
+|   Optional:                                                                                                |\n\
+|     -verbose                            This option will make the agent print cloudbook information.       |\n\
+|     -log                                This option will make the agent create a log with cloudbook info.  |\n\
+|     -help, -syntax, -info               This option will print this help and syntax info and terminate.    |\n\
+|                                                                                                            |\n\
+| Note: the order of the options is not relevant.                                                            |\n\
+|____________________________________________________________________________________________________________|"
 
 
 
@@ -115,10 +142,13 @@ def print(*args, **kwargs):
 
 	# If the agent ID has been already set
 	if my_agent_ID is not None:
-		if my_agent_ID == "agent_0": 	# For the agent_0 add dots to make it start at the same letter column in the console
-			builtins.print(my_agent_ID + "...................:", *args, **kwargs)
+		if verbose:
+			if my_agent_ID == "agent_0": 	# For the agent_0 add dots to make it start at the same letter column in the console
+				builtins.print(my_agent_ID + "...................:", *args, **kwargs)
+			else:
+				builtins.print(my_agent_ID + ":", *args, **kwargs)
 		else:
-			builtins.print(my_agent_ID + ":", *args, **kwargs)
+			pass
 	else: 	# For the case in which the ID is None, print it with the normal built-in
 		builtins.print(*args, **kwargs)
 
@@ -140,7 +170,7 @@ def hello():
 @application.route("/get_project_agent_id", methods=['GET', 'PUT', 'POST'])
 def get_project_agent_id():
 	print("/get_project_agent_id route has been invoked.")
-	return my_project_name + " - " + my_agent_ID
+	return my_project_folder + " - " + my_agent_ID
 
 # @application.route('/quit')
 # def flask_quit():
@@ -561,6 +591,8 @@ def edit_agent(agent_id, project_name, new_grant='', new_fs=''):
 def flaskThreaded(port, sock=None):
 	port = int(port)
 	print("Launching in port:", port)
+	if not verbose:
+		os.environ['WERKZEUG_RUN_MAIN'] = 'true'
 	if sock:
 		sock.close()
 	application.run(debug=False, host="0.0.0.0", port=port, threaded=True)
@@ -600,7 +632,6 @@ def flaskThreaded(port, sock=None):
 # 		Aumenta cloudbook_version
 def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue_param,\
 						stdin_stream, value_var_grant_param, array_var_ip_param, value_var_port_param):
-	print("Flask Process is now active")
 	global mp_stats_queue
 	mp_stats_queue = mp_stats_queue_param
 	global value_var_grant
@@ -615,8 +646,9 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 	# Note: this global variables belong to other process
 	# init_info vars:
 	global my_agent_ID
-	global my_project_name
+	global my_project_folder
 	global fs_path
+	global verbose
 	global project_path
 	start_port_search = 5000
 
@@ -644,12 +676,13 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 			
 			if "init_info" in item:
 				try:
-					my_agent_ID = item["init_info"]["my_agent_ID"]
-					my_project_name = item["init_info"]["my_project_name"]
-					fs_path = item["init_info"]["fs_path"]
-					start_port_search = item["init_info"]["start_port_search"]
+					my_agent_ID 		= item["init_info"]["my_agent_ID"]
+					my_project_folder 	= item["init_info"]["my_project_folder"]
+					fs_path 			= item["init_info"]["fs_path"]
+					start_port_search 	= item["init_info"]["start_port_search"]
+					verbose 			= item["init_info"]["verbose"]
 
-					project_path = cloudbook_path + os.sep + my_project_name
+					project_path = cloudbook_path + os.sep + my_project_folder
 				except Exception as e:
 					print(ERR_QUEUE_KEY_VALUE)
 					raise e
@@ -658,8 +691,8 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 
 			elif "launch" in item:
 				try:
-					launch = item["launch"]
-					cold_redeploy = item["launch"]["cold_redeploy"]
+					launch 				= item["launch"]
+					cold_redeploy 		= item["launch"]["cold_redeploy"]
 				except Exception as e:
 					print(ERR_QUEUE_KEY_VALUE)
 					raise e
@@ -672,6 +705,13 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 						flask_thread = threading.Thread(target=flaskThreaded, args=[local_port], daemon=True)
 					flask_thread.start()
 
+					# Set up the logger
+					log = logging.getLogger('werkzeug')
+					log.setLevel(logging.ERROR)
+					if not verbose:
+						log.disabled = True
+						application.logger.disabled = True
+
 					retrieved_project_id = None
 					while not retrieved_project_id:
 						try:
@@ -681,9 +721,9 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 							print(ERR_GET_PROJ_ID_REFUSED)
 							time.sleep(0.5)
 							print("Retrying...")
-					
+
 					mp_queue_data = {}
-					if my_project_name + " - " + my_agent_ID == retrieved_project_id:
+					if my_project_folder + " - " + my_agent_ID == retrieved_project_id:
 						mp_queue_data["flask_proc_ok"] = {}
 						mp_queue_data["flask_proc_ok"]["local_port"] = local_port
 					else:
@@ -700,8 +740,8 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 					print(ERR_DUS_ALREADY_LOADED)
 					raise Exception()
 				try:
-					cloudbook_dict_agents = item["after_launch_info"]["cloudbook_dict_agents"]
-					agents_grant = item["after_launch_info"]["agents_grant"]
+					cloudbook_dict_agents 	= item["after_launch_info"]["cloudbook_dict_agents"]
+					agents_grant 			= item["after_launch_info"]["agents_grant"]
 					cloudbook_version = 1
 
 					du_list = item["after_launch_info"]["du_list"]
@@ -738,8 +778,8 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 
 			elif "hot_redeploy" in item:
 				try:
-					cloudbook_dict_agents = item["hot_redeploy"]["cloudbook_dict_agents"]
-					agents_grant = item["hot_redeploy"]["agents_grant"]
+					cloudbook_dict_agents 	= item["hot_redeploy"]["cloudbook_dict_agents"]
+					agents_grant 			= item["hot_redeploy"]["agents_grant"]
 
 					cloudbook_version += 1
 				except Exception as e:
@@ -797,17 +837,18 @@ def create_stats(t1):
 # if it has worked correctly with no port collisions. If everything is ok, retrives the used local_port. If there is a problem
 # (a port collision), restarts the FlaskProcess.
 def init_flask_process_and_check_ok(cold_redeploy):
-	global my_agent_ID, my_project_name, fs_path, start_port_search, mp_flask2agent_queue, mp_agent2flask_queue, flask_proc
+	global my_agent_ID, my_project_folder, fs_path, start_port_search, mp_flask2agent_queue, mp_agent2flask_queue, flask_proc
 	global array_var_ip, value_var_port, value_var_grant
 	# Create the init_info_item for FlaskProcess
-	# {"init_info": {"my_agent_ID": my_agent_ID, "my_project_name": my_project_name, "fs_path": fs_path, 
+	# {"init_info": {"my_agent_ID": my_agent_ID, "my_project_folder": my_project_folder, "fs_path": fs_path, 
 	#				"start_port_search": start_port_search}}
 	init_info_item = {}
 	init_info_item["init_info"] = {}
 	init_info_item["init_info"]["my_agent_ID"] = my_agent_ID
-	init_info_item["init_info"]["my_project_name"] = my_project_name
+	init_info_item["init_info"]["my_project_folder"] = my_project_folder
 	init_info_item["init_info"]["fs_path"] = fs_path
 	init_info_item["init_info"]["start_port_search"] = start_port_search
+	init_info_item["init_info"]["verbose"] = verbose
 
 	# Create the launch_item for the FlaskProcess
 	# {"launch": True}
@@ -967,7 +1008,6 @@ def is_critical(du):
 
 #####   AGENT MAIN   #####
 if __name__ == "__main__":
-	print("Starting agent...")
 
 	# Set Ctrl+C handler
 	signal.signal(signal.SIGINT, sigint_handler)
@@ -976,24 +1016,80 @@ if __name__ == "__main__":
 	stdin_stream = sys.stdin.fileno()
 
 	# Process parameters
-	num_param = len(sys.argv)
-	for i in range(1,len(sys.argv)):
-		if sys.argv[i]=="-agent_id":
-			print(sys.argv[i], sys.argv[i+1])
-			agent_id = sys.argv[i+1]
-			i=i+1
-		if sys.argv[i]=="-project_folder":
-			print(sys.argv[i], sys.argv[i+1])
-			my_project_name = sys.argv[i+1]
-			i=i+1
-	
-	# Check if the non-optional parameters have been set
-	if not agent_id:
-		print ("option -agent_id missing")
-		sys.exit(1)
-	if not my_project_name:
-		print ("option -project_folder missing")
-		sys.exit(1)
+	#num_param = len(sys.argv)
+	#for i in range(1,len(sys.argv)):
+	#	if sys.argv[i]=="-agent_id":
+	#		print(sys.argv[i], sys.argv[i+1])
+	#		agent_id = sys.argv[i+1]
+	#		i=i+1
+	#	if sys.argv[i]=="-project_folder":
+	#		print(sys.argv[i], sys.argv[i+1])
+	#		my_project_folder = sys.argv[i+1]
+	#		i=i+1
+	#
+	## Check if the non-optional parameters have been set
+	#if not agent_id:
+	#	print ("option -agent_id missing")
+	#	sys.exit(1)
+	#if not my_project_folder:
+	#	print ("option -project_folder missing")
+	#	sys.exit(1)
+
+	#####################################
+	# Program name is not parameter
+	args = sys.argv
+	args.pop(0)
+	#print("Arguments:", args, "\n")
+
+	# Check if user asks for help
+	if any(i in args for i in ["-help", "-syntax", "-info"]):
+		print(COMMAND_SYNTAX)
+		os._exit(0)
+
+	# Assert existence of mandatory parameters
+	if "-agent_id" not in args:
+		print("The '-agent_id' parameter is mandatory. Note: must be followed by the <agent_id>.")
+		print("For more info type 'agent.py -help'")
+		os._exit(1)
+	if "-project_folder" not in args:
+		print("The '-project_folder' parameter is mandatory. Note: must be followed by the <project_folder>.")
+		print("For more info type 'agent.py -help'")
+		os._exit(1)
+
+	# Analyze parameters
+	agent_file = None
+	skip = False
+	try:
+		for i in range(len(args)):
+			if skip:
+				skip = False
+				continue
+			#print("analyzing:", args[i])
+			if args[i]=="-agent_id":
+				agent_file = args[i+1]
+				skip = True
+				continue
+			if args[i]=="-project_folder":
+				my_project_folder = args[i+1]
+				skip = True
+				continue
+			if args[i]=="-verbose":
+				verbose = True
+				continue
+			if args[i]=="-log":
+				log_to_file = True
+				continue
+	except Exception as e:
+		print("\nThe syntax is not correct. Use: agent.py -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-log].\n")
+		print("For more info type 'agent.py -help'")
+		os._exit(1)
+
+	if verbose:
+		print("Parameters detected:")
+		print("agent_id:", agent_file)
+		print("project_folder:", my_project_folder)
+		print("verbose:", verbose)
+		print("log:", log_to_file)
 
 	# Create multiprocessing Values and Arrays
 	value_var_grant = Value("i", 0) 		# Value (integer with initial value 0) sharable by processes
@@ -1003,8 +1099,8 @@ if __name__ == "__main__":
 
 
 	# Load agent config file
-	project_path = cloudbook_path + os.sep + my_project_name
-	agent_config_dict = loader.load_dictionary(project_path + os.sep + "agents" + os.sep + "config_"+agent_id+".json")
+	project_path = cloudbook_path + os.sep + my_project_folder
+	agent_config_dict = loader.load_dictionary(project_path + os.sep + "agents" + os.sep + "config_"+agent_file+".json")
 
 	my_agent_ID = agent_config_dict["AGENT_ID"]
 	fs_path = agent_config_dict["DISTRIBUTED_FS"]
@@ -1026,7 +1122,7 @@ if __name__ == "__main__":
 	settings_string = "\n"
 	settings_string += "The agent has the following configuration:\n"
 	settings_string += "  - ID: " + my_agent_ID + "\n"
-	settings_string += "  - Project: " + my_project_name + "\n"
+	settings_string += "  - Project: " + my_project_folder + "\n"
 	settings_string += "  - Grant: " + num2grant(value2num(value_var_grant)) + "\n"
 	settings_string += "  - FSPath: " + fs_path + "\n"
 	settings_string += "  - Stats creation period: " + str(agent_stats_interval) + "\n"
@@ -1050,10 +1146,6 @@ if __name__ == "__main__":
 
 	# Launch the stats file creator thread
 	threading.Thread(target=create_stats, args=(agent_stats_interval,)).start()
-
-	# Set up the logger
-	log = logging.getLogger('werkzeug')
-	log.setLevel(logging.ERROR)
 
 	# Try (up to 3 times) to get ip and port to share with the rest of cloudbook
 	retrys = 3

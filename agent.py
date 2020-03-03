@@ -578,10 +578,10 @@ def edit_agent(agent_id, project_name, new_grant='', new_fs=''):
 	config_agent_file_path = cloudbook_path + os.sep + project_name + os.sep + "agents" + os.sep + "config_"+agent_id+".json"
 	config_dict = loader.load_dictionary(config_agent_file_path)
 
-	if(new_grant!=''):
+	if new_grant!='' and new_grant!=None:
 		config_dict["GRANT_LEVEL"] = new_grant
 
-	if(new_fs!=''):
+	if new_fs!='' and new_fs!=None:
 		config_dict["DISTRIBUTED_FS"] = new_fs
 
 	loader.write_dictionary(config_dict, config_agent_file_path)

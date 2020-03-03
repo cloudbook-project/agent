@@ -254,6 +254,14 @@ class GeneralInfoTab (ttk.Frame):
 	def launch(self, r, c):
 		global projects
 		agent_id = self.agents_info[r-3]['AGENT_ID']
+
+		configjson_path = cloudbook_path + os.sep + self.project_name + os.sep + "distributed" + os.sep + "config.json"
+		if not os.path.exists(configjson_path):
+			# s = _show(title, message, QUESTION, OKCANCEL, **options)
+			if not tk.messagebox.askokcancel("WARNING", "There is no config.json file in 'distributed' project folder and launching agent will probably fail. Do you still want to proceed?", icon=tk.messagebox.WARNING):
+				print("Aborting agent", agent_id, "launch...")
+				return
+
 		print("Launching agent", agent_id)
 
 		# Create the basic agent command (os generic)
@@ -356,15 +364,15 @@ class AddAgentTab(ttk.Frame):
 		self.grant_combo.grid(row=3, column=2, sticky=E+W)
 
 		# Fspath label, entry and button
-		self.fspath_label = ttk.Label(self, text="Filesystem path")
-		self.fspath_label.grid(row=4, column=1, sticky=E+W)
+		# self.fspath_label = ttk.Label(self, text="Filesystem path")
+		# self.fspath_label.grid(row=4, column=1, sticky=E+W)
 
-		self.fspath_entry = ttk.Entry(self)
-		self.fspath_entry["state"] = (tk.DISABLED)
-		self.fspath_entry.grid(row=4, column=2, sticky=E+W)
+		# self.fspath_entry = ttk.Entry(self)
+		# self.fspath_entry["state"] = (tk.DISABLED)
+		# self.fspath_entry.grid(row=4, column=2, sticky=E+W)
 
-		self.fspath_button = ttk.Button(self, text="Select", command=self.browse_fspath)
-		self.fspath_button.grid(row=4, column=3, sticky=E+W)
+		# self.fspath_button = ttk.Button(self, text="Select", command=self.browse_fspath)
+		# self.fspath_button.grid(row=4, column=3, sticky=E+W)
 
 		# Agent with id=0 checkbutton
 		self.checkbutton_agent_0 = ttk.Checkbutton(self, text="Create the agent with id=0.", \
@@ -393,23 +401,24 @@ class AddAgentTab(ttk.Frame):
 	def create(self):
 		grant = self.switch(self.grant_combo.current())
 		print("Grant selected:", grant)
-		fspath = self.fspath_entry.get()
-		if fspath != "":
-			print("Path to distributed filesystem:", fspath)
-		else:
-			print("Default path to distributed filesystem.")
+		# fspath = self.fspath_entry.get()
+		# if fspath != "":
+		# 	print("Path to distributed filesystem:", fspath)
+		# else:
+		# 	print("Default path to distributed filesystem.")
+		fspath = ""
 		if self.is_agent_0.get():
 			print("Creating agent with id=0.")
 		agent.create_agent(grant=grant, project_name=self.project_name, fs=fspath, agent_0=self.is_agent_0.get())
 		app.refresh()
 	
 	# This button launches a new gui to select the folder for the FS path. This parameter is optional.
-	def browse_fspath(self):
-		filename = filedialog.askdirectory()
-		self.fspath_entry["state"] = (tk.NORMAL)
-		self.fspath_entry.insert(0,filename)
-		self.fspath_entry["state"] = ("readonly")
-		print(filename)
+	# def browse_fspath(self):
+	# 	filename = filedialog.askdirectory()
+	# 	self.fspath_entry["state"] = (tk.NORMAL)
+	# 	self.fspath_entry.insert(0,filename)
+	# 	self.fspath_entry["state"] = ("readonly")
+	# 	print(filename)
 
 
 # Tab that contains the information of a specific agent located in the machine.
@@ -453,21 +462,21 @@ class AgentXTab(ttk.Frame):
 
 
 		# Fspath label, value_label, combobox and button
-		self.fspath_label = ttk.Label(self, text="Filesystem Path:")
-		self.fspath_label.grid(row=5, column=0, sticky=E+W)
+		# self.fspath_label = ttk.Label(self, text="Filesystem Path:")
+		# self.fspath_label.grid(row=5, column=0, sticky=E+W)
 
-		if len(agent_info['DISTRIBUTED_FS'])>36:
-			self.fspath_value_label = ttk.Label(self, text="..."+agent_info['DISTRIBUTED_FS'][-33:], width=36)
-		else:
-			self.fspath_value_label = ttk.Label(self, text=agent_info['DISTRIBUTED_FS'], width=36)
-		self.fspath_value_label.grid(row=5, column=1, sticky=E+W)
+		# if len(agent_info['DISTRIBUTED_FS'])>36:
+		# 	self.fspath_value_label = ttk.Label(self, text="..."+agent_info['DISTRIBUTED_FS'][-33:], width=36)
+		# else:
+		# 	self.fspath_value_label = ttk.Label(self, text=agent_info['DISTRIBUTED_FS'], width=36)
+		# self.fspath_value_label.grid(row=5, column=1, sticky=E+W)
 
-		self.fspath_entry = ttk.Entry(self, width=36)
-		self.fspath_entry["state"] = (tk.DISABLED)
-		self.fspath_entry.grid(row=5, column=2, sticky=E+W)
+		# self.fspath_entry = ttk.Entry(self, width=36)
+		# self.fspath_entry["state"] = (tk.DISABLED)
+		# self.fspath_entry.grid(row=5, column=2, sticky=E+W)
 
-		self.fspath_button = ttk.Button(self, text="Select", command=self.browse_fspath)
-		self.fspath_button.grid(row=5, column=3, sticky=E+W)
+		# self.fspath_button = ttk.Button(self, text="Select", command=self.browse_fspath)
+		# self.fspath_button.grid(row=5, column=3, sticky=E+W)
 
 		ttk.Label(self, text="").grid(row=6, column=0, sticky=E+W) # Line separator
 
@@ -476,12 +485,12 @@ class AgentXTab(ttk.Frame):
 		self.save_changes_button.grid(row=7, column=0, columnspan=4)
 		
 	# Functionality of the browse button. Launches a folder selection gui to select the FS path. 
-	def browse_fspath(self):
-		initial_dir = self.agent_info['DISTRIBUTED_FS']
-		new_fspath_value = filedialog.askdirectory(initialdir=initial_dir)
-		self.fspath_entry["state"] = (tk.NORMAL)
-		self.fspath_entry.insert(0, new_fspath_value)
-		self.fspath_entry["state"] = ("readonly")
+	# def browse_fspath(self):
+	# 	initial_dir = self.agent_info['DISTRIBUTED_FS']
+	# 	new_fspath_value = filedialog.askdirectory(initialdir=initial_dir)
+	# 	self.fspath_entry["state"] = (tk.NORMAL)
+	# 	self.fspath_entry.insert(0, new_fspath_value)
+	# 	self.fspath_entry["state"] = ("readonly")
 
 	# Functionality save the changes in grant and/or fspath. It calls "edit_agent()" function in agent.py.
 	def save_changes(self):
@@ -493,9 +502,10 @@ class AgentXTab(ttk.Frame):
 			}  
 			return switcher.get(index, "No grant selected.")
 		new_grant_value = switch(self.grant_combobox.current())
-		new_fspath_value = self.fspath_entry.get()
 		print("The new grant for agent " + self.agent_info['AGENT_ID'] + " is: " + new_grant_value)
-		print("The new path for the agent " + self.agent_info['AGENT_ID'] + " is: " + new_fspath_value)
+		# new_fspath_value = self.fspath_entry.get()
+		# print("The new path for the agent " + self.agent_info['AGENT_ID'] + " is: " + new_fspath_value)
+		new_fspath_value = ""
 		agent.edit_agent(agent_id=self.agent_info['AGENT_ID'], project_name=self.project_name, new_grant=new_grant_value, new_fs=new_fspath_value)
 		app.refresh()
 

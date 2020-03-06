@@ -67,26 +67,25 @@ _Important note: the GUI is the most recommended method to control the agent for
 It is possible to launch the GUI and the agent through a console command, which admits parameters to modify the default behaviour of these. Here is a small manual for this use. **This is only recommended for developers or advanced users**.
 
 * The GUI has the following console syntax:
-	`gui.py [-verbose] [-log] [-help|-syntax|-info]`
+	`gui.py [-verbose] [-help|-syntax|-info]`
 	Example: `gui.py -verbose`
 	Options:
 	* _Optional_:
 		**-verbose**: This option will make the agents print cloudbook information.
-		**-log**: this option will make the agents create a log with cloudbook info.
 		**-help, -syntax, -info**: this option will print this help and syntax info and terminate.
 
 
 * The agent has the following console syntax:
-	`agent.py -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-log] [-help|-syntax|-info]`
-	Example: `agent.py -agent_id agent_S4MY6ZGKQRT8RTVWLJZP -project_folder NBody -log`
+	`agent.py -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-help|-syntax|-info]`
+	Example: `agent.py -agent_id agent_S4MY6ZGKQRT8RTVWLJZP -project_folder NBody -verbose`
 	Options:
 	* _Mandatory_:
 		**-agent_id `<agent_id>`**: this option is used to specify the name of the agent to launch.
 		**-project_folder `<project_folder>`**: this option is used to specify the name of the folder containing the agent.
 	* _Optional_:
 		**-verbose**: this option will make the agent print cloudbook information.
-		**-log**: this option will make the agent create a log with cloudbook info.
 		**-help, -syntax, -info**: this option will print this help and syntax info and terminate.
 
 _Note: the order of the options is not relevant in any of the programs._
-_Note 2: it is possible to do all tasks using the command line, though, this is not recommended because if the program leaves in abnormal conditions the agent may leave open subprocesses (which have to be closed manually with the task manager or similar)._
+_Note 2: unrecognized options will be ignored._
+_Note 3: it is possible to do all tasks using the command line, though, this is not recommended because if the program leaves in abnormal conditions the agent may leave open subprocesses (which have to be closed manually with the task manager or similar)._

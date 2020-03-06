@@ -39,7 +39,7 @@ else:
 verbose = False
 
 # Indicator of logginng level (to file)
-log_to_file = False
+#log_to_file = False
 
 
 
@@ -48,7 +48,7 @@ COMMAND_SYNTAX = "\
  ____________________________________________________________________________________________________________ \n\
 |                                                                                                            |\n\
 | SYNTAX:                                                                                                    |\n\
-|   gui.py [-verbose] [-log] [-help|-syntax|-info]                                                           |\n\
+|   gui.py [-verbose] [-help|-syntax|-info]                                                                  |\n\
 |                                                                                                            |\n\
 | EXAMPLE:                                                                                                   |\n\
 |   gui.py -verbose                                                                                          |\n\
@@ -56,10 +56,9 @@ COMMAND_SYNTAX = "\
 | OPTIONS:                                                                                                   |\n\
 |   Optional:                                                                                                |\n\
 |     -verbose                            This option will make the agents print cloudbook information.      |\n\
-|     -log                                This option will make the agents create a log with cloudbook info. |\n\
 |     -help, -syntax, -info               This option will print this help and syntax info and terminate.    |\n\
 |                                                                                                            |\n\
-| Note: the order of the options is not relevant.                                                            |\n\
+| Note: the order of the options is not relevant. Unrecognized options will be ignored.                      |\n\
 |____________________________________________________________________________________________________________|"
 
 
@@ -268,8 +267,8 @@ class GeneralInfoTab (ttk.Frame):
 		agent_command = "agent.py -agent_id " + agent_id + " -project_folder " + self.project_name
 		if verbose:
 			agent_command += " -verbose"
-		if log_to_file:
-			agent_command += " -log"
+		# if log_to_file:
+		# 	agent_command += " -log"
 
 		if(platform.system()=="Windows"):
 			# proc = subprocess.Popen("py agent.py -agent_id " + agent_id + " -project_folder " + self.project_name, shell=True, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
@@ -602,18 +601,19 @@ if __name__ == '__main__':
 			if args[i]=="-verbose":
 				verbose = True
 				continue
-			if args[i]=="-log":
-				log_to_file = True
-				continue
+			# if args[i]=="-log":
+			# 	log_to_file = True
+			# 	continue
 	except Exception as e:
 		print("The syntax is not correct. Use:")
-		print("  gui.py [-verbose] [-log] [-help|-syntax|-info]")
+		print("  gui.py [-verbose] [-help|-syntax|-info]")
 		print("For more info type 'gui.py -help'")
 		os._exit(1)
 
 	if verbose:
-		print("verbose:", verbose)
-		print("log:", log_to_file)
+		print("Launched in verbose mode. Agents will be launched in verbose mode as well.")
+		# print("verbose:", verbose)
+		# print("log:", log_to_file)
 
 	# If the system is Windows, set ID (arbitrary) to use icon also in the taskbar
 	if(platform.system()=="Windows"):

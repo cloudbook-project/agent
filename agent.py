@@ -34,7 +34,7 @@ my_project_folder = None
 verbose = False
 
 # Indicator of logginng level (to file)
-log_to_file = False
+#log_to_file = False
 
 # Dictionary of agents 
 cloudbook_dict_agents = {}
@@ -111,10 +111,10 @@ COMMAND_SYNTAX = "\
  ____________________________________________________________________________________________________________ \n\
 |                                                                                                            |\n\
 | SYNTAX:                                                                                                    |\n\
-|   agent.py -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-log] [-help|-syntax|-info]   |\n\
+|   agent.py -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-help|-syntax|-info]          |\n\
 |                                                                                                            |\n\
 | EXAMPLE:                                                                                                   |\n\
-|   agent.py -agent_id agent_S4MY6ZGKQRT8RTVWLJZP -project_folder NBody -log                                 |\n\
+|   agent.py -agent_id agent_S4MY6ZGKQRT8RTVWLJZP -project_folder NBody -verbose                             |\n\
 |                                                                                                            |\n\
 | OPTIONS:                                                                                                   |\n\
 |   Mandatory:                                                                                               |\n\
@@ -123,10 +123,9 @@ COMMAND_SYNTAX = "\
 |                                                                                                            |\n\
 |   Optional:                                                                                                |\n\
 |     -verbose                            This option will make the agent print cloudbook information.       |\n\
-|     -log                                This option will make the agent create a log with cloudbook info.  |\n\
 |     -help, -syntax, -info               This option will print this help and syntax info and terminate.    |\n\
 |                                                                                                            |\n\
-| Note: the order of the options is not relevant.                                                            |\n\
+| Note: the order of the options is not relevant. Unrecognized options will be ignored.                      |\n\
 |____________________________________________________________________________________________________________|"
 
 
@@ -705,11 +704,11 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 						flask_thread = threading.Thread(target=flaskThreaded, args=[local_port], daemon=True)
 					flask_thread.start()
 
-					# Set up the logger
-					log = logging.getLogger('werkzeug')
-					log.setLevel(logging.ERROR)
+					# Set up the werkzeug logger
+					werkzeug_logger = logging.getLogger('werkzeug')
+					werkzeug_logger.setLevel(logging.ERROR)
 					if not verbose:
-						log.disabled = True
+						werkzeug_logger.disabled = True
 						application.logger.disabled = True
 
 					retrieved_project_id = None
@@ -1075,12 +1074,12 @@ if __name__ == "__main__":
 			if args[i]=="-verbose":
 				verbose = True
 				continue
-			if args[i]=="-log":
-				log_to_file = True
-				continue
+			# if args[i]=="-log":
+			# 	log_to_file = True
+			# 	continue
 	except Exception as e:
 		print("The syntax is not correct. Use:")
-		print("  agent.py -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-log] [-help|-syntax|-info]")
+		print("  agent.py -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-help|-syntax|-info]")
 		print("For more info type 'agent.py -help'")
 		os._exit(1)
 
@@ -1089,7 +1088,7 @@ if __name__ == "__main__":
 		print("agent_id:", agent_file)
 		print("project_folder:", my_project_folder)
 		print("verbose:", verbose)
-		print("log:", log_to_file)
+		# print("log:", log_to_file)
 
 	# Create multiprocessing Values and Arrays
 	value_var_grant = Value("i", 0) 		# Value (integer with initial value 0) sharable by processes

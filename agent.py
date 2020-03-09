@@ -687,6 +687,8 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 					raise e
 				if my_agent_ID=="agent_0":
 					sys.stdin = os.fdopen(stdin_stream)
+				# Add the path
+				sys.path.append(fs_path + os.sep + "working_dir")
 
 			elif "launch" in item:
 				try:
@@ -749,8 +751,8 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 					raise e
 				try:
 					print("The list of DUs to load in this agent is:", du_list)
-					sys.path.append(fs_path)
 					du_files_path = fs_path + os.sep + "du_files"
+					sys.path.append(du_files_path)
 					for du in du_list:
 						print("  Trying to load", du)
 						if is_critical(du) and cloudbook_is_running():
@@ -762,7 +764,7 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 							print(ERR_DUS_NOT_EXIST)
 							time.sleep(1)
 						exec("global "+du, globals())
-						exec("from du_files import "+du, globals())
+						exec("import "+du, globals())
 						exec(du+".invoker=outgoing_invoke")
 						exec(du+".__CLOUDBOOK__=__CLOUDBOOK__")
 						print("  ", du, "successfully loaded")

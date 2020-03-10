@@ -68,7 +68,7 @@ COMMAND_SYNTAX = "\
 # Print function overloaded in order to make it print the id before anything and keep track of the traces of each agent easier.
 def print(*args, **kwargs):
 	# If the print is just a separation, i.e.:  print()  keep it like that
-	if len(args)==1 and len(kwargs)==0 and args[0]=='':
+	if (len(args)==0 and len(kwargs)==0) or (len(args)==1 and len(kwargs)==0 and args[0]==''):
 		builtins.print()
 		return
 
@@ -95,8 +95,47 @@ def get_info():
 	projects_list = next(os.walk(cloudbook_path))[1]
 	#print("projects_list:", projects_list)
 
-	# Clean the possible processes running in projects deleted
+	proj_is_clean = True
 	deletable_projects = []
+	# For each project, add its agents info in the global variable within the key with the same name of the project folder
+	for proj in projects_list:
+		# The path to the config folder inside the project
+		agents_path = cloudbook_path + os.sep + proj + os.sep + "agents"
+
+		# Check if agents_path exists (if not, it is not a real project and it is ignored)
+		if not os.path.exists(agents_path):
+			print("Ignored directory '" + proj + "' due to not containing 'agents' folder.")
+			proj_is_clean = False
+			if proj in projects:
+				deletable_projects.append(proj)
+			continue
+
+		# List with the files inside "cloudbook/projectX/agents/" folder
+		all_files = next(os.walk(agents_path))[2]
+
+		# Cleaning. If file does not contain "config_" it is not an agent config file.
+		files = [file for file in all_files if  "config_agent_" in file and \
+												"config_agent_"==file[:13] and \
+												".json" in file and \
+												".json"==file[-5:]]
+
+		# Print the files that will be ignored as not configuration name compliant
+		for file in all_files:
+			if file not in files:
+				print("The file 'agents/" + file + "' from the project '" + proj + "' has been ignored. It is not agent configuration name compliant.")
+				proj_is_clean = False
+
+		# If the project is new, add it
+		if proj not in projects:
+			projects[proj] = {}
+			projects[proj]['agent_pid_dict'] = {}
+		projects[proj]['agents_info'] = {}
+
+		# Add each agent to the project
+		for file in files:
+			projects[proj]['agents_info'][files.index(file)] = loader.load_dictionary(agents_path + os.sep + file)
+
+	# Clean the possible processes running in projects deleted
 	for proj in projects:
 		if proj not in projects_list:
 			print("WARNING: project " + proj + " has been deleted. All running agents on that project (if any) will be stopped.")
@@ -107,27 +146,15 @@ def get_info():
 			deletable_projects.append(proj)
 
 	for deletable_project in deletable_projects:
-		del projects[deletable_project]
+		try:
+			del projects[deletable_project]
+		except:
+			pass
 
-	# For each project, add its agents info in the global variable within the key with the same name of the project folder
-	for proj in projects_list:
-		if proj not in projects:
-			projects[proj] = {}
-			projects[proj]['agent_pid_dict'] = {}
-		projects[proj]['agents_info'] = {}
+	if not proj_is_clean:
+		print("Please try to keep the cloudbook directory and its projects clean.")
 
-		# The path to the config folder inside the project
-		agents_path = cloudbook_path + os.sep + proj + os.sep + "agents"
-
-		# List with the files inside "cloudbook/projectX/agents/" folder
-		files = next(os.walk(agents_path))[2]
-
-		# Cleaning. If file does not contain "config_" it is not an agent config file
-		files = [file for file in files if 'config_' in file and ".json" in file]
-
-		for file in files:
-			projects[proj]['agents_info'][files.index(file)] = loader.load_dictionary(agents_path + os.sep + file)
-
+	print()
 	#print("PROJECTS:\n", projects)
 
 def sigint_handler(*args):

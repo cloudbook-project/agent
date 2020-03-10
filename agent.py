@@ -135,7 +135,7 @@ COMMAND_SYNTAX = "\
 # Print function overloaded in order to make it print the id before anything and keep track of the traces of each agent easier.
 def print(*args, **kwargs):
 	# If the print is just a separation, i.e.:  print()  keep it like that
-	if len(args)==1 and len(kwargs)==0 and args[0]=='':
+	if (len(args)==0 and len(kwargs)==0) or (len(args)==1 and len(kwargs)==0 and args[0]==''):
 		builtins.print()
 		return
 

@@ -685,8 +685,10 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 				except Exception as e:
 					print(ERR_QUEUE_KEY_VALUE)
 					raise e
-				if my_agent_ID=="agent_0":
-					sys.stdin = os.fdopen(stdin_stream)
+
+				# Allow input from console
+				sys.stdin = os.fdopen(stdin_stream)
+
 				# Add the path
 				sys.path.append(fs_path + os.sep + "working_dir")
 

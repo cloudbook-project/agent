@@ -30,7 +30,7 @@ import builtins
 projects = {}
 
 # Global variable to store the general path to cloudbook, used to access all files and folders needed
-if(platform.system()=="Windows"):
+if platform.system()=="Windows":
 	cloudbook_path = os.environ['HOMEDRIVE'] + os.environ['HOMEPATH'] + os.sep + "cloudbook"
 else:
 	cloudbook_path = os.environ['HOME'] + os.sep + "cloudbook"
@@ -180,7 +180,7 @@ def kill_all_processes():
 
 
 def kill_process(proc):
-	if(platform.system()=="Windows"):
+	if platform.system()=="Windows":
 		# proc.send_signal(signal.CTRL_BREAK_EVENT)
 		# proc.kill()
 		kill_tree_command = "TASKKILL /F /T /PID "+str(proc.pid)
@@ -188,17 +188,22 @@ def kill_process(proc):
 			kill_tree_command += " > NUL 2>&1"
 		os.system(kill_tree_command)	
 	else:
-		os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+		try:
+			os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+		except Exception as e:
+			if not verbose:
+				builtins.print(e)
 
 
-# Function that returns the pid of the process in which the agent_0 is running based on the window name, which is: CLOUDBOOK_interactive _cmd_(<project_name>)
-def get_pid_agent_0(project_name):
+# Function that returns the pid of the process in which the agent_0 is running based on the window name, which is: CLOUDBOOK_agent_0_(<project_name>)
+def get_pid_agent_0_windows(project_name):
 	import re
-	output = subprocess.Popen('tasklist /FI \"WindowTitle eq CLOUDBOOK_interactive_cmd_('+project_name+')\"', shell=True, stdout=subprocess.PIPE)
+
+	output = subprocess.Popen('tasklist /FI \"WindowTitle eq CLOUDBOOK_agent_0_('+project_name+')\"', shell=True, stdout=subprocess.PIPE)
 	response = output.communicate()
 	decoded_response = response[0].decode("utf-8")
 
-	lines_response = decoded_response.split("\r\n")				# Response should be composed of 5 lines (there may be more if run several instances)
+	lines_response = decoded_response.split("\r\n")				# Response should be composed of 5 lines (more if run several instances)
 	for lineno in range(0, len(lines_response)):
 		line = lines_response[lineno]
 		if lineno>=3 and lineno<len(lines_response)-1:			# Only the 4th line is interesting
@@ -206,6 +211,57 @@ def get_pid_agent_0(project_name):
 			line_split = line_single_spaced.split(" ")			# Split by spaces
 			pid = int(line_split[1])							# Take the second argument (the PID)
 			return pid
+
+
+# Function that returns the pid of the process in which the agent_0 is running based on the window name, which is: CLOUDBOOK_agent_0_(<project_name>)
+def get_pid_agent_0_unix(project_name):
+	import re
+
+	output = subprocess.Popen("ps -ef | grep '[p]ython3 agent.py -agent_id agent_0 -project_folder "+project_name+"'", shell=True, stdout=subprocess.PIPE)
+	response = output.communicate()
+	decoded_response = response[0].decode("utf-8")
+
+	pids = []
+	ppids = []
+	lines_response = decoded_response.split("\n")			# Response should be composed of 3 lines (more if run several instances)
+	for lineno in range(0, len(lines_response)):
+		line = lines_response[lineno]
+		line_single_spaced = re.sub(r"\s\s+", " ", line)	# Trim multiple spaces (substitute for only 1 space)
+		line_split = line_single_spaced.split(" ")			# Split by spaces
+		pid = int(line_split[1])							# Take the second argument (the PID)
+		ppid = int(line_split[2])							# Take the third argument (the PPID)
+		if pid in ppids:		# If the PID matches one of previous PPIDs it is the PID of the main agent process (it spawns child)
+			return pid
+		if ppid in pids:		# If the PPID matches one of previous PIDs it is the PID of the main agent process (this was spawned by it)
+			return ppid
+		# If there are not matches, append each to their list
+		pids.append(pid)
+		ppids.append(ppid)
+
+	return None
+
+
+# This function allows to check the existence of a command in the system (only tested in UNIX)
+def tool_exists(name):
+	exists = False
+	try:
+		devnull = open(os.devnull)
+		subprocess.Popen([name, "--version"], stdout=devnull, stderr=devnull).communicate()
+		exists = True
+	except OSError as e:
+		pass
+		# if e.errno == os.errno.ENOENT:
+		# 	exists = False
+	try:
+		devnull = open(os.devnull)
+		subprocess.Popen([name, "--help"], stdout=devnull, stderr=devnull).communicate()
+		exists = True
+	except OSError as e:
+		pass
+		# if e.errno == os.errno.ENOENT:
+		# 	exists = False
+
+	return exists
 
 
 
@@ -232,34 +288,34 @@ class GeneralInfoTab (ttk.Frame):
 
 		for i in range(h):
 			for j in range(w):
-				if(i==0):
+				if i==0:
 					self.cell = ttk.Label(self)
 					self.cell["text"] = title_bar[j]
 					self.cell["font"] = ("Helvetica", 12, "bold", "underline")
 					self.cell.grid(row=i+2, column=j)
 				else:
-					if(j==w-3):
+					if j==w-3:
 						self.launch_button = ttk.Button(self, text="Launch", command=lambda r=i+2, c=j: self.launch(r, c))
 						self.launch_button.grid(column=j, row=i+2)
 						if self.agents_info[i-1]['AGENT_ID'] in projects[project_name]["agent_pid_dict"]:
 							self.launch_button.config(state="disabled")
 						else:
 							self.launch_button.config(state="normal")
-					elif(j==w-2):
+					elif j==w-2:
 						self.stop_button = ttk.Button(self, text="Stop", command=lambda r=i+2, c=j: self.stop(r, c))
 						self.stop_button.grid(column=j, row=i+2)
 						if self.agents_info[i-1]['AGENT_ID'] in projects[project_name]["agent_pid_dict"]:
 							self.stop_button.config(state="normal")
 						else:
 							self.stop_button.config(state="disabled")
-					elif(j==w-1):
+					elif j==w-1:
 						self.remove_button = ttk.Button(self, text="Remove", command=lambda r=i+2, c=j: self.remove(r, c))
 						self.remove_button.grid(column=j, row=i+2)
 						if self.agents_info[i-1]['AGENT_ID'] in projects[project_name]["agent_pid_dict"]:
 							self.remove_button.config(state="disabled")
 						else:
 							self.remove_button.config(state="normal")
-					elif(j==w-4):
+					elif j==w-4:
 						self.cell=ttk.Label(self)
 						if self.agents_info[i-1]['AGENT_ID'] in projects[project_name]["agent_pid_dict"]:
 							self.cell["foreground"] = "green"
@@ -288,6 +344,10 @@ class GeneralInfoTab (ttk.Frame):
 				print("Aborting agent", agent_id, "launch...")
 				return
 
+		class Dummy:
+			def __init__(self):
+				self.pid = None
+
 		print("Launching agent", agent_id)
 
 		# Create the basic agent command (os generic)
@@ -297,26 +357,60 @@ class GeneralInfoTab (ttk.Frame):
 		# if log_to_file:
 		# 	agent_command += " -log"
 
-		if(platform.system()=="Windows"):
-			# proc = subprocess.Popen("py agent.py -agent_id " + agent_id + " -project_folder " + self.project_name, shell=True, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+		# Windows case
+		if platform.system()=="Windows":
 			full_command = "py -3 " + agent_command
 			if agent_id=="agent_0":
-				full_command = "start \"CLOUDBOOK_interactive_cmd_("+self.project_name+")\" " + full_command
+				full_command = "start \"CLOUDBOOK_agent_0_("+self.project_name+")\" " + full_command
 				subprocess.Popen(full_command, shell=True, creationflags=subprocess.CREATE_NEW_CONSOLE)
-				class Dummy:
-					def __init__(self):
-						self.pid = None
 
 				proc = Dummy()
 				while not proc.pid:
 					time.sleep(1)
-					proc.pid = get_pid_agent_0(self.project_name)
-				#proc = subprocess.Popen("py -3 agent.py -agent_id " + agent_id + " -project_folder " + self.project_name, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+					try:
+						proc.pid = get_pid_agent_0_windows(self.project_name)
+					except:
+						print("The pid of the agent_0 terminal could not be retrieved. Retrying...")
 			else:
 				proc = subprocess.Popen(full_command, shell=True, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+
+		# Non-Windows case (UNIX)
 		else:
 			full_command = "python3 " + agent_command
-			proc = subprocess.Popen(full_command, shell=True, preexec_fn=os.setsid)
+			if agent_id=="agent_0":
+				# If the gnome-terminal is installed (Ubuntu)
+				if tool_exists("gnome-terminal"):
+					print("Using new gnome-terminal as terminal emulator for agent_0.")
+					full_command = "gnome-terminal --title=\"CLOUDBOOK_agent_0_("+self.project_name+")\" -- " + full_command
+					subprocess.Popen(full_command, shell=True, preexec_fn=os.setsid)
+
+					proc = Dummy()
+					while not proc.pid:
+						time.sleep(1)
+						try:
+							proc.pid = get_pid_agent_0_unix(self.project_name)
+						except:
+							print("The pid of the agent_0 terminal could not be retrieved. Retrying...")
+				# If the lxterminal is installed (Raspbian)
+				elif tool_exists("lxterminal"):
+					print("Using new lxterminal as terminal emulator for agent_0.")
+					full_command = "lxterminal --title=\"CLOUDBOOK_agent_0_("+self.project_name+")\" -e '" + full_command + "'"
+					subprocess.Popen(full_command, shell=True, preexec_fn=os.setsid)
+
+					proc = Dummy()
+					while not proc.pid:
+						time.sleep(1)
+						try:
+							proc.pid = get_pid_agent_0_unix(self.project_name)
+						except:
+							print("The pid of the agent_0 terminal could not be retrieved. Retrying...")
+				# If no supported terminal is installed, launch in the same window as the GUI (as any other agent)
+				else:
+					print("Neither gnome-terminal nor lxterminal are installed. Launching agent_0 in same terminal as the GUI.")
+					proc = subprocess.Popen(full_command, shell=True, preexec_fn=os.setsid)
+			else:
+				proc = subprocess.Popen(full_command, shell=True, preexec_fn=os.setsid)
+
 		projects[self.project_name]["agent_pid_dict"][agent_id] = proc
 		print("Active processes: ", projects[self.project_name]["agent_pid_dict"], "\n")
 		app.refresh()
@@ -643,7 +737,7 @@ if __name__ == '__main__':
 		# print("log:", log_to_file)
 
 	# If the system is Windows, set ID (arbitrary) to use icon also in the taskbar
-	if(platform.system()=="Windows"):
+	if platform.system()=="Windows":
 		import ctypes
 		ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('Cloudbook_GUI')
 

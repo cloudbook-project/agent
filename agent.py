@@ -975,13 +975,23 @@ def get_port_and_ip(lan_mode=True):
 	return (ip, port)
 
 
-# This function checks if cloudbook is already running in order not to load critical DUs in cold redeploy
-def cloudbook_is_running():
+# This function checks if cloudbook is already running in order not to load critical DUs in cold redeploy.
+# If force_remove is specified to be True, RUNNING file is removed (True will be returned if removed).
+def cloudbook_is_running(force_remove=False):
 	running_file_path = fs_path + os.sep + "RUNNING"
 	running = False
 	if os.path.exists(running_file_path):
-		#print("RUNNING file found.")
+		print("RUNNING file found.")
 		running = True
+		if force_remove:
+			removed = False
+			while not removed:
+				try:
+					os.remove(running_file_path)
+				except Exception as e:
+					print("Cloud not remove RUNNING file. Retrying...")
+					time.sleep(0.1)
+			print("RUNNING file was successfully removed.")
 	return running
 
 
@@ -992,10 +1002,10 @@ def check_redeploy_files():
 	hot_redeploy = False
 	cold_redeploy = False
 	if os.path.exists(hot_redeploy_file_path):
-		#print("HOT_REDEPLOY file found.")
+		print("HOT_REDEPLOY file found.")
 		hot_redeploy = True
 	if os.path.exists(cold_redeploy_file_path):
-		#print("COLD_REDEPLOY file found.")
+		print("COLD_REDEPLOY file found.")
 		cold_redeploy = True
 	return (hot_redeploy, cold_redeploy)
 
@@ -1018,27 +1028,6 @@ if __name__ == "__main__":
 	# Save input stream to be able to use input in console of agent_0 for interactive programs
 	stdin_stream = sys.stdin.fileno()
 
-	# Process parameters
-	#num_param = len(sys.argv)
-	#for i in range(1,len(sys.argv)):
-	#	if sys.argv[i]=="-agent_id":
-	#		print(sys.argv[i], sys.argv[i+1])
-	#		agent_id = sys.argv[i+1]
-	#		i=i+1
-	#	if sys.argv[i]=="-project_folder":
-	#		print(sys.argv[i], sys.argv[i+1])
-	#		my_project_folder = sys.argv[i+1]
-	#		i=i+1
-	#
-	## Check if the non-optional parameters have been set
-	#if not agent_id:
-	#	print ("option -agent_id missing")
-	#	sys.exit(1)
-	#if not my_project_folder:
-	#	print ("option -project_folder missing")
-	#	sys.exit(1)
-
-	#####################################
 	# Program name is not parameter
 	args = sys.argv[:]
 	args.pop(0)
@@ -1100,7 +1089,6 @@ if __name__ == "__main__":
 	string2array("", array_var_ip)
 	value_var_port = Value("i", 0) 			# Value (integer with initial value 0) sharable by processes
 
-
 	# Load agent config file
 	project_path = cloudbook_path + os.sep + my_project_folder
 	agent_config_dict = loader.load_dictionary(project_path + os.sep + "agents" + os.sep + "config_"+agent_file+".json")
@@ -1108,6 +1096,10 @@ if __name__ == "__main__":
 	my_agent_ID = agent_config_dict["AGENT_ID"]
 	fs_path = agent_config_dict["DISTRIBUTED_FS"]
 	num2value(grant2num(agent_config_dict["GRANT_LEVEL"]), value_var_grant)
+
+	# If agent is the agent_0, clear the RUNNING file (a previous execution did not end correctly with return)
+	if my_agent_ID=="agent_0":
+		cloudbook_is_running(force_remove=True)
 
 	# Change working directory
 	os.chdir(fs_path + os.sep + "working_dir")

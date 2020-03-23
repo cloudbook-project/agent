@@ -93,7 +93,7 @@ ERR_QUEUE_KEY_VALUE = "ERROR: there was a problem item obtained from the queue. 
 ERR_READ_WRITE = "ERROR: reading/writing not allowed or wrong path."
 ERR_FLASK_PORT_IN_USE = "ERROR: this agent is using a port that was checked to be free but, due to race conditions, another \
 agent did the same and started using it before."
-ERR_DUS_NOT_EXIST = "ERROR: could not load the specified DU(s), because file(s) did not exist."
+ERR_DUS_NOT_EXIST = "ERROR: cannot load the specified DU(s), because file(s) do not exist."
 GEN_ERR_LAUNCHING_FLASK = "GENERIC ERROR: something went wrong when launching the flask thread."
 GEN_ERR_LOADING_DUS = "GENERIC ERROR: something went wrong when loading DUs."
 ERR_DUS_ALREADY_LOADED = "ERROR: a list of DU(s) has already been loaded."
@@ -337,7 +337,7 @@ def outgoing_invoke(invocation_dict, configuration = None):
 	assert params["args"] is not None 		# Must exist, may be empty list
 	assert params["kwargs"] is not None 	# Must exist, may be empty dictionary
 
-	# If the du is in this agent, then it is a local invocation
+	# If the du is in this agent (du_default is special case, it does not count), then it is a local invocation
 	if invoked_du in du_list and invoked_du != 'du_default':
 		print("===AGENT: LOCAL INVOCATION===")
 
@@ -654,17 +654,12 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 	# launch vars:
 	flask_thread = None
 
-	# after_launch_info vars:
+	# deploy_info vars:
 	global cloudbook_dict_agents
 	global agents_grant
 	global cloudbook_version
 	global du_list
 	global loaded_du_list
-
-	# hot_redeploy vars:
-	# global cloudbook_dict_agents
-	# global agents_grant
-	# global cloudbook_version
 
 	# local_port = None
 	# global first_launch
@@ -692,10 +687,10 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 				# Add the path
 				sys.path.append(fs_path + os.sep + "working_dir")
 
-			elif "launch" in item:
+			elif "launch_info" in item:
 				try:
-					launch 				= item["launch"]
-					cold_redeploy 		= item["launch"]["cold_redeploy"]
+					launch 				= item["launch_info"]
+					cold_redeploy 		= item["launch_info"]["cold_redeploy"]
 				except Exception as e:
 					print(ERR_QUEUE_KEY_VALUE)
 					raise e
@@ -734,60 +729,63 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 						print("The flask process will be restarted automatically.")
 						mp_queue_data["restart_flask_proc"] = ERR_FLASK_PORT_IN_USE
 					mp_flask2agent_queue.put(mp_queue_data)
+					cloudbook_version = 1
 				except Exception as e:
 					print(GEN_ERR_LAUNCHING_FLASK)
 					raise e
 
-			elif "after_launch_info" in item:
-				if loaded_du_list:
-					print(ERR_DUS_ALREADY_LOADED)
-					raise Exception()
+			elif "deploy_info" in item:
 				try:
-					cloudbook_dict_agents 	= item["after_launch_info"]["cloudbook_dict_agents"]
-					agents_grant 			= item["after_launch_info"]["agents_grant"]
-					cloudbook_version = 1
-
-					du_list = item["after_launch_info"]["du_list"]
-				except Exception as e:
-					print(ERR_QUEUE_KEY_VALUE)
-					raise e
-				try:
-					print("The list of DUs to load in this agent is:", du_list)
-					du_files_path = fs_path + os.sep + "du_files"
-					sys.path.append(du_files_path)
-					for du in du_list:
-						print("  Trying to load", du)
-						if is_critical(du) and cloudbook_is_running():
-							print("  ", ERR_LOAD_CRIT_DU_CLOUDBOOK_RUNNING)
-							print("  ", du, "has been skipped (not loaded)")
-							break
-						du_i_file_path = du_files_path + os.sep + du+".py"
-						if not os.path.exists(du_i_file_path):
-							print(ERR_DUS_NOT_EXIST)
-							time.sleep(1)
-						exec("global "+du, globals())
-						exec("import "+du, globals())
-						exec(du+".invoker=outgoing_invoke")
-						exec(du+".__CLOUDBOOK__=__CLOUDBOOK__")
-						print("  ", du, "successfully loaded")
-						loaded_du_list.append(du)
-					
-					if all([du in loaded_du_list for du in du_list]):
-						print("All DUs have been loaded successfully.")
-
-				except Exception as e:
-					print(GEN_ERR_LOADING_DUS)
-					raise e
-
-			elif "hot_redeploy" in item:
-				try:
-					cloudbook_dict_agents 	= item["hot_redeploy"]["cloudbook_dict_agents"]
-					agents_grant 			= item["hot_redeploy"]["agents_grant"]
-
+					cloudbook_dict_agents 	= item["deploy_info"]["cloudbook_dict_agents"]
+					agents_grant 			= item["deploy_info"]["agents_grant"]
+					new_du_list 			= item["deploy_info"]["new_du_list"]
 					cloudbook_version += 1
 				except Exception as e:
 					print(ERR_QUEUE_KEY_VALUE)
 					raise e
+
+				# Load the dus that could not be loaded and the new ones, if any
+				not_loaded_du_list = [du for du in new_du_list if du not in loaded_du_list]
+				if not_loaded_du_list:
+					# Update du_list (but use only old_du_list and new_du_list to have clean code)
+					old_du_list = du_list
+					du_list = new_du_list
+					print("old_du_list:", old_du_list)
+					print("new_du_list:", new_du_list)
+					print("The currently loaded DUs are:", loaded_du_list)
+					print("The following DUs will be loaded now:", not_loaded_du_list)
+
+					try:
+						du_files_path = fs_path + os.sep + "du_files"
+						sys.path.append(du_files_path)
+						for du in not_loaded_du_list:
+							print("  Trying to load", du)
+							if is_critical(du) and cloudbook_is_running():
+								print("  ", ERR_LOAD_CRIT_DU_CLOUDBOOK_RUNNING)
+								print("  ", du, "has been skipped (not loaded)")
+								continue
+							du_i_file_path = du_files_path + os.sep + du+".py"
+							while not os.path.exists(du_i_file_path):
+								print(ERR_DUS_NOT_EXIST)
+								time.sleep(1)
+							exec("global "+du, globals())
+							exec("import "+du, globals())
+							exec(du+".invoker=outgoing_invoke")
+							exec(du+".__CLOUDBOOK__=__CLOUDBOOK__")
+							print("  ", du, "successfully loaded")
+							loaded_du_list.append(du)
+
+						print("The currently loaded DUs are:", loaded_du_list)
+						if all([du in loaded_du_list for du in new_du_list]):
+							print("All DUs have been loaded successfully.")
+						else:
+							print("Not all DUs could be loaded.")
+
+					except Exception as e:
+						print(GEN_ERR_LOADING_DUS)
+						raise e
+				else:
+					print("There are no new DUs to load.")
 
 			else:
 				print(ERR_QUEUE_KEY_VALUE)
@@ -854,10 +852,10 @@ def init_flask_process_and_check_ok(cold_redeploy):
 	init_info_item["init_info"]["verbose"] = verbose
 
 	# Create the launch_item for the FlaskProcess
-	# {"launch": True}
+	# {"launch_info": True}
 	launch_item = {}
-	launch_item["launch"] = {}
-	launch_item["launch"]["cold_redeploy"] = cold_redeploy
+	launch_item["launch_info"] = {}
+	launch_item["launch_info"]["cold_redeploy"] = cold_redeploy
 
 	# If cold_redeploy, create virtual restart request from the flask proecess
 	if cold_redeploy:
@@ -1196,13 +1194,12 @@ if __name__ == "__main__":
 		#print("agents_grant.json has been read.\n agents_grant = ", agents_grant)
 
 	# Internal function to load the "cloudbook.json" file created by the deployer
-	def read_cloudbook_file(hot_redeploy=False):
+	def read_cloudbook_file():
 		global cloudbook_dict_agents
 		global du_list
 		cloudbook_dict_agents = loader.load_dictionary(cloudbookjson_file_path)
 		#print("cloudbook.json has been read.\n cloudbook_dict_agents = ", cloudbook_dict_agents)
-		if not hot_redeploy:
-			du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
+		du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
 
 	# Get the cloudbook and the agents_grant (DUs and IP/port of each agent).
 	while not du_list:
@@ -1223,14 +1220,14 @@ if __name__ == "__main__":
 
 	print("My du_list: ", du_list)
 
-	# Pass the after_launch_info to the FlaskProcess
-	# {"after_launch_info": {"du_list": du_list, "cloudbook_dict_agents": cloudbook_dict_agents, "agents_grant": agents_grant}}
-	after_launch_info_item = {}
-	after_launch_info_item["after_launch_info"] = {}
-	after_launch_info_item["after_launch_info"]["du_list"] = du_list
-	after_launch_info_item["after_launch_info"]["cloudbook_dict_agents"] = cloudbook_dict_agents
-	after_launch_info_item["after_launch_info"]["agents_grant"] = agents_grant
-	mp_agent2flask_queue.put(after_launch_info_item)
+	# Pass the deploy_info to the FlaskProcess
+	# {"deploy_info": {"du_list": du_list, "cloudbook_dict_agents": cloudbook_dict_agents, "agents_grant": agents_grant}}
+	deploy_info_item = {}
+	deploy_info_item["deploy_info"] = {}
+	deploy_info_item["deploy_info"]["new_du_list"] = du_list
+	deploy_info_item["deploy_info"]["cloudbook_dict_agents"] = cloudbook_dict_agents
+	deploy_info_item["deploy_info"]["agents_grant"] = agents_grant
+	mp_agent2flask_queue.put(deploy_info_item)
 
 	# Forever loop (check grant modifications, write grant_XX_file, check and handle redeploy requests)
 	time_start = time.monotonic()
@@ -1253,16 +1250,16 @@ if __name__ == "__main__":
 			if hot_redeploy:
 				print("Executing HOT_REDEPLOY...")
 				read_agents_grant_file()
-				read_cloudbook_file(hot_redeploy=True)
+				read_cloudbook_file()
 				# Pass the init_info to the FlaskProcess
-				# {"hot_redeploy": {"cloudbook_dict_agents": cloudbook_dict_agents, "agents_grant": agents_grant}}
-				hot_redeploy_item = {}
-				hot_redeploy_item["hot_redeploy"] = {}
-				hot_redeploy_item["hot_redeploy"]["cloudbook_dict_agents"] = cloudbook_dict_agents
-				hot_redeploy_item["hot_redeploy"]["agents_grant"] = agents_grant
-				mp_agent2flask_queue.put(hot_redeploy_item)
+				# {"deploy_info": {"cloudbook_dict_agents": cloudbook_dict_agents, "agents_grant": agents_grant}}
+				deploy_info_item = {}
+				deploy_info_item["deploy_info"] = {}
+				deploy_info_item["deploy_info"]["cloudbook_dict_agents"] = cloudbook_dict_agents
+				deploy_info_item["deploy_info"]["agents_grant"] = agents_grant
+				deploy_info_item["deploy_info"]["new_du_list"] = du_list
+				mp_agent2flask_queue.put(deploy_info_item)
 				
-				# ! - IMPROVEMENT: Check if the agent only has loaded the du_default and load more in hot redeploy???
 			if cold_redeploy:
 				print("Executing COLD_REDEPLOY...")
 				flask_proc.terminate()
@@ -1279,14 +1276,14 @@ if __name__ == "__main__":
 
 				print("My new du_list: ", du_list)
 
-				# Pass the after_launch_info to the FlaskProcess
-				# {"after_launch_info": {"du_list": du_list, "cloudbook_dict_agents": cloudbook_dict_agents, "agents_grant": agents_grant}}
-				after_launch_info_item = {}
-				after_launch_info_item["after_launch_info"] = {}
-				after_launch_info_item["after_launch_info"]["du_list"] = du_list
-				after_launch_info_item["after_launch_info"]["cloudbook_dict_agents"] = cloudbook_dict_agents
-				after_launch_info_item["after_launch_info"]["agents_grant"] = agents_grant
-				mp_agent2flask_queue.put(after_launch_info_item)
+				# Pass the deploy_info to the FlaskProcess
+				# {"deploy_info": {"new_du_list": du_list, "cloudbook_dict_agents": cloudbook_dict_agents, "agents_grant": agents_grant}}
+				deploy_info_item = {}
+				deploy_info_item["deploy_info"] = {}
+				deploy_info_item["deploy_info"]["new_du_list"] = du_list
+				deploy_info_item["deploy_info"]["cloudbook_dict_agents"] = cloudbook_dict_agents
+				deploy_info_item["deploy_info"]["agents_grant"] = agents_grant
+				mp_agent2flask_queue.put(deploy_info_item)
 
 			# Update also IP/port ??? --> call get_ip_info() again and update if necessary
 			#grant_dictionary[my_agent_ID]["IP"] = ip

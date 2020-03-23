@@ -107,6 +107,7 @@ ERR_GET_PROJ_ID_REFUSED = "ERROR: conection refused when FlaskProcess was trying
 requested port."
 ERR_LOAD_CRIT_DU_CLOUDBOOK_RUNNING = "ERROR: cloudbook is already running and critical dus should not be loaded at this \
 point in order to avoid unexpected behaviours due to global variables may have lost their state."
+ERR_NO_JSONIZABLE = "ERROR: cannot convert the invocation parameters into json."
 COMMAND_SYNTAX = "\
  ____________________________________________________________________________________________________________ \n\
 |                                                                                                            |\n\
@@ -388,14 +389,18 @@ def outgoing_invoke(invocation_dict, configuration = None):
 			print(ERR_IP_NOT_FOUND)
 			raise e 	# This should never happen
 
+		url = "http://"+desired_host_ip_port+"/invoke"
 		try:
-			url = "http://"+desired_host_ip_port+"/invoke"
-
 			invocation_dict_json = json.dumps(invocation_dict).encode('utf8')
-			print("Launching request to:", url, "with json:", invocation_dict_json)
+		except Exception as e:
+			print(ERR_NO_JSONIZABLE)
+			raise e
+
+		print("Launching request to:", url, "with json:", invocation_dict_json)
+		try:
 			request_object = urllib.request.Request(url, data=invocation_dict_json, headers={'content-type': 'application/json'})
 			r = urllib.request.urlopen(request_object)
-			break
+			break	# Stop iterating over the possible agents (already got a responsive one)
 
 		except Exception as e:
 			print("URL was not answered by " + remote_agent + " (IP:port --> " + desired_host_ip_port + ")")

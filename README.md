@@ -11,7 +11,7 @@ The Cloudbook agent component runs in each of the machines of a project and it i
 	- tkinter (ususally auto-installed with Python 3.X in Windows)
 	- flask
 	- pynat
-	- urllib
+	- requests
 
 _Note: any extra library that has to be imported in the code to execute, must be installed previously in the machine (i.e. if you want to run a game that uses pygame you have to install it previousy in each agent machine)_
 
@@ -20,7 +20,7 @@ _Note: any extra library that has to be imported in the code to execute, must be
 
 The Agent is capable of performing the following tasks:
 - Configure itself with the corresponding files: the project configuration file (./distributed/config.json) and its own (./agents/config_agent_XX.json).
-- Stay idle until the deployer indicates the DUs to load (./distributed/cloudbook.json) and then load the required DUs overwriting their invoke function for an agent function that knows the IPs and ports  of the agents (obtained reading the file ./distributed/agents_grant.json) to be able to send requests to them.
+- Stay idle until the deployer indicates the DUs to load (./distributed/cloudbook.json) and then load the required DUs overwriting their invoke function for an agent function that knows the IPs and ports of the agents (obtained reading the file ./distributed/agents_grant.json) to be able to send requests to them.
 - Launch an http server to allow receiving requests from other agents.
 - Create a stats file periodically (./distributed/stats/stats_agent_XX.json) every AGENT_STATS_INTERVAL seconds.
 - Create a grant file periodically (./distributed/agents_grant/agent_XX_grant.json) every AGENT_GRANT_INTERVAL seconds.

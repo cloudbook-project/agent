@@ -1,8 +1,9 @@
 #####   IMPORTS   #####
 # Internet
-from pynat import get_ip_info		# Requires pip3 install pynat
+from werkzeug.serving import WSGIRequestHandler
 from flask import Flask, request	# Requires pip3 install flask
-import urllib						# Requires pip3 install urllib
+from pynat import get_ip_info		# Requires pip3 install pynat
+import requests 					# Requires pip install requests
 import socket
 
 # Multi thread/process
@@ -82,11 +83,14 @@ loaded_du_list = []
 # Number of times the cloudbook has changed and DUs have been (re)loaded
 cloudbook_version = 0
 
+# HTTP session used to launch/receive all conections (uning only one port)
+session = None
+
 
 
 #####   CONSTANTS   #####
 CRIT_ERR_NO_ANSWER = "CLOUDBOOK CRITICAL ERROR: no agent could answer the remote invocation to a function in a critical DU. \
-The DU state is lost and program is corrupt. Critical alarm created in the distributed filesystem in order that depployer's \
+The DU state is lost and program is corrupt. Critical alarm created in the distributed filesystem in order that deployer's \
 surveillance monitor knows that an invocation has failed. The Flask process will be stopped and restarted."
 ERR_IP_NOT_FOUND = "ERROR: cannot find the ip and port for invoking the desired agent."
 ERR_QUEUE_KEY_VALUE = "ERROR: there was a problem item obtained from the queue. Wrong key/value."
@@ -108,6 +112,8 @@ requested port."
 ERR_LOAD_CRIT_DU_CLOUDBOOK_RUNNING = "ERROR: cloudbook is already running and critical dus should not be loaded at this \
 point in order to avoid unexpected behaviours due to global variables may have lost their state."
 ERR_NO_JSONIZABLE = "ERROR: cannot convert the invocation parameters into json."
+ERR_NO_JSON_RESPONSE = "ERROR: there was not json information in the response."
+
 COMMAND_SYNTAX = "\
  ____________________________________________________________________________________________________________ \n\
 |                                                                                                            |\n\
@@ -170,7 +176,7 @@ def hello():
 @application.route("/get_project_agent_id", methods=['GET', 'PUT', 'POST'])
 def get_project_agent_id():
 	print("/get_project_agent_id route has been invoked.")
-	return my_project_folder + " - " + my_agent_ID
+	return json.dumps(my_project_folder + " - " + my_agent_ID)
 
 # @application.route('/quit')
 # def flask_quit():
@@ -390,18 +396,22 @@ def outgoing_invoke(invocation_dict, configuration = None):
 			raise e 	# This should never happen
 
 		url = "http://"+desired_host_ip_port+"/invoke"
+		print("Launching post to:", url, "with data:", invocation_dict)
+		# try:
+		# 	invocation_dict_json = json.dumps(invocation_dict).encode('utf8')
+		# except Exception as e:
+		# 	print(ERR_NO_JSONIZABLE)
+		# 	raise e
+
+		global session
+		if not session:
+			session = requests.Session()
 		try:
-			invocation_dict_json = json.dumps(invocation_dict).encode('utf8')
-		except Exception as e:
+			r = session.post(url, json=invocation_dict)
+			break	# Stop iterating over the possible agents (already got a responsive one)
+		except TypeError as e:
 			print(ERR_NO_JSONIZABLE)
 			raise e
-
-		print("Launching request to:", url, "with json:", invocation_dict_json)
-		try:
-			request_object = urllib.request.Request(url, data=invocation_dict_json, headers={'content-type': 'application/json'})
-			r = urllib.request.urlopen(request_object)
-			break	# Stop iterating over the possible agents (already got a responsive one)
-
 		except Exception as e:
 			print("URL was not answered by " + remote_agent + " (IP:port --> " + desired_host_ip_port + ")")
 			write_alarm("WARNING")
@@ -439,7 +449,11 @@ def outgoing_invoke(invocation_dict, configuration = None):
 	# end_of_while
 		
 	# If the loop finishes with break, then a response has been received and this invocation and function finishes normally.
-	readed_response = r.read()
+	try:
+		readed_response = r.json()
+	except Exception as e:
+		print(ERR_NO_JSON_RESPONSE)
+		raise e
 	print("Response received:", readed_response)
 
 	try: 		# For functions that return some json
@@ -610,30 +624,6 @@ def flaskThreaded(port, sock=None):
 
 
 # This function is used in a new process. It is in charge of handling the queues for data exchange (and load DUs) to allow Flask execution.
-# Espera para siempre mirando mp_agent2flask_queue cada 1 segundo:
-# 	Si hay init_info:
-# 		Carga la info
-# 		Crea project_path
-# 	Si hay launch:
-# 		Se mira si es un lanzamiento normal o es por un cold redeploy
-# 		Si es normal:
-# 			Se busca un puerto disponible desde start_port_search en adelante
-# 			Se crea el FlaskThread en el puerto disponible 
-# 		Si no (es decir, es por un cold_redeploy):
-# 			Se lanza el FlaskThread en el puerto start_port_search
-# 		Se lanza el thread creado: FlaskThread (en el que se lanza la app que queda corriendo para atender las invocaciones desde otros agentes)
-# 		Se hacen peticiones al puerto en el que se ha lanzado Flask hasta obtener respuesta
-# 		Se compara el id y proyecto del agente con el que devuelve la peticion:
-# 			Si es igual: se manda por mp_flask2agent_queue el dato {"flask_proc_ok":{"local_port": local_port}}
-# 			Si es distinto: se manda por mp_flask2agent_queue el dato {"restart_flask_proc": ERR_FLASK_PORT_IN_USE}
-# 	Si hay after_launch_info:
-# 		Recarga diccionarios (cloudbook_dict_agents, agents_grant, du_list)
-# 		Incializa cloudbook_version a 1
-# 		Importa el código de las dus
-# 		Añade cada du cargada a loaded_du_list
-# 	Si hay hot_redeploy: 
-# 		Recarga diccionarios (cloudbook_dict_agents, agents_grant)
-# 		Aumenta cloudbook_version
 def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue_param,\
 						stdin_stream, value_var_grant_param, array_var_ip_param, value_var_port_param):
 	global mp_stats_queue
@@ -657,6 +647,7 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 	start_port_search = 5000
 
 	# launch vars:
+	global session
 	flask_thread = None
 
 	# deploy_info vars:
@@ -700,6 +691,9 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 					print(ERR_QUEUE_KEY_VALUE)
 					raise e
 				try:
+					WSGIRequestHandler.protocol_version = "HTTP/1.1"
+					if not session:
+						session = requests.Session()
 					if not cold_redeploy:
 						(local_port, sock) = get_port_available(port=start_port_search)
 						flask_thread = threading.Thread(target=flaskThreaded, args=[local_port, sock], daemon=True)
@@ -718,12 +712,16 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 					retrieved_project_id = None
 					while not retrieved_project_id:
 						try:
-							retrieved_data = urllib.request.urlopen("http://localhost:"+str(local_port)+"/get_project_agent_id")
-							retrieved_project_id = retrieved_data.read().decode('UTF-8')
+							resp = requests.get("http://localhost:"+str(local_port)+"/get_project_agent_id")
 						except Exception as e:
 							print(ERR_GET_PROJ_ID_REFUSED)
-							time.sleep(0.5)
-							print("Retrying...")
+						try:
+							retrieved_project_id = resp.json()
+							break
+						except:
+							print(ERR_NO_JSON_RESPONSE)
+						time.sleep(0.5)
+						print("Retrying...")
 
 					mp_queue_data = {}
 					if my_project_folder + " - " + my_agent_ID == retrieved_project_id:

@@ -83,9 +83,6 @@ loaded_du_list = []
 # Number of times the cloudbook has changed and DUs have been (re)loaded
 cloudbook_version = 0
 
-# HTTP session used to launch/receive all conections (uning only one port)
-session = None
-
 
 
 #####   CONSTANTS   #####
@@ -397,23 +394,16 @@ def outgoing_invoke(invocation_dict, configuration = None):
 
 		url = "http://"+desired_host_ip_port+"/invoke"
 		print("Launching post to:", url, "with data:", invocation_dict)
-		# try:
-		# 	invocation_dict_json = json.dumps(invocation_dict).encode('utf8')
-		# except Exception as e:
-		# 	print(ERR_NO_JSONIZABLE)
-		# 	raise e
 
-		global session
-		if not session:
-			session = requests.Session()
 		try:
-			r = session.post(url, json=invocation_dict)
+			r = get_session().post(url, json=invocation_dict)
 			break	# Stop iterating over the possible agents (already got a responsive one)
 		except TypeError as e:
 			print(ERR_NO_JSONIZABLE)
 			raise e
 		except Exception as e:
-			print("URL was not answered by " + remote_agent + " (IP:port --> " + desired_host_ip_port + ")")
+			print("POST request was not answered by " + remote_agent + " (IP:port --> " + desired_host_ip_port + ")")
+			print(e)
 			write_alarm("WARNING")
 
 			if remote_agent == last_agent: 	# If all agents have been tested
@@ -623,6 +613,14 @@ def flaskThreaded(port, sock=None):
 	print("00000000000000000000000000000000000000000000000000000000000000000000000000")
 
 
+# This function gets the global session object (creates it if it does not exist yet)
+def get_session():
+	global session
+	if not session:
+		session = requests.Session()
+	return session
+
+
 # This function is used in a new process. It is in charge of handling the queues for data exchange (and load DUs) to allow Flask execution.
 def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue_param,\
 						stdin_stream, value_var_grant_param, array_var_ip_param, value_var_port_param):
@@ -647,7 +645,9 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 	start_port_search = 5000
 
 	# launch vars:
-	global session
+	global session 			# HTTP session used to launch/receive all conections (using only one port)
+	session = None
+	get_session()
 	flask_thread = None
 
 	# deploy_info vars:
@@ -692,8 +692,6 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 					raise e
 				try:
 					WSGIRequestHandler.protocol_version = "HTTP/1.1"
-					if not session:
-						session = requests.Session()
 					if not cold_redeploy:
 						(local_port, sock) = get_port_available(port=start_port_search)
 						flask_thread = threading.Thread(target=flaskThreaded, args=[local_port, sock], daemon=True)
@@ -712,7 +710,7 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 					retrieved_project_id = None
 					while not retrieved_project_id:
 						try:
-							resp = requests.get("http://localhost:"+str(local_port)+"/get_project_agent_id")
+							resp = get_session().get("http://localhost:"+str(local_port)+"/get_project_agent_id")#, headers={'Connection':'close'})
 						except Exception as e:
 							print(ERR_GET_PROJ_ID_REFUSED)
 						try:
@@ -720,6 +718,7 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 							break
 						except:
 							print(ERR_NO_JSON_RESPONSE)
+							retrieved_project_id = None
 						time.sleep(0.5)
 						print("Retrying...")
 

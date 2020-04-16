@@ -160,7 +160,14 @@ def get_info():
 	porjects_with_stoppped_agents = {}
 	for proj in projects:
 		for ag in projects[proj]["agent_pid_dict"]:
-			running = psutil.pid_exists(projects[proj]["agent_pid_dict"][ag].pid)			# Fastest alternative
+			#running = psutil.pid_exists(projects[proj]["agent_pid_dict"][ag].pid)			# Fastest alternative
+			running = projects[proj]["agent_pid_dict"][ag].is_running()
+			if platform.system()!="Windows":	# In UNIX
+				zombie = projects[proj]["agent_pid_dict"][ag].status()==psutil.STATUS_ZOMBIE
+				running = running and not zombie
+				if zombie:
+					kill_process(projects[proj]["agent_pid_dict"][ag])
+			builtins.print("proj:", proj, "\tagent:", ag, "\tpid:", projects[proj]["agent_pid_dict"][ag].pid, "\trunning:", running)
 			if not running:
 				if proj not in porjects_with_stoppped_agents:
 					porjects_with_stoppped_agents[proj] = []
@@ -388,6 +395,7 @@ class GeneralInfoTab (ttk.Frame):
 						print("The pid of the agent_0 terminal could not be retrieved. Retrying...")
 			else:
 				proc = subprocess.Popen(full_command, shell=True, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+				proc = psutil.Process(proc.pid)
 
 		# Non-Windows case (UNIX)
 		else:
@@ -430,6 +438,7 @@ class GeneralInfoTab (ttk.Frame):
 					proc = subprocess.Popen(full_command, shell=True, preexec_fn=os.setsid)
 			else:
 				proc = subprocess.Popen(full_command, shell=True, preexec_fn=os.setsid)
+				proc = psutil.Process(proc.pid)
 
 		projects[self.project_name]["agent_pid_dict"][agent_id] = proc
 		print("Active processes: ", projects[self.project_name]["agent_pid_dict"], "\n")

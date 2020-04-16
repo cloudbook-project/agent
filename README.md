@@ -12,6 +12,7 @@ The Cloudbook agent component runs in each of the machines of a project and it i
 	- flask
 	- pynat
 	- requests
+	- psutil
 
 _Note: any extra library that has to be imported in the code to execute, must be installed previously in the machine (i.e. if you want to run a game that uses pygame you have to install it previousy in each agent machine)_
 

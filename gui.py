@@ -10,6 +10,7 @@ from tkinter import messagebox
 import time
 import subprocess
 import signal
+import psutil					# Requires pip3 install psutil
 
 # System, files
 import os, sys, platform
@@ -21,6 +22,7 @@ import agent				# In project directory
 
 # Basic
 import builtins
+import re
 
 
 
@@ -154,8 +156,21 @@ def get_info():
 	if not proj_is_clean:
 		print("Please try to keep the cloudbook directory and its projects clean.")
 
-	print()
-	#print("PROJECTS:\n", projects)
+	# Check if all launched agents are still running and turn to stopped the ones that are not
+	porjects_with_stoppped_agents = {}
+	for proj in projects:
+		for ag in projects[proj]["agent_pid_dict"]:
+			running = psutil.pid_exists(projects[proj]["agent_pid_dict"][ag].pid)			# Fastest alternative
+			if not running:
+				if proj not in porjects_with_stoppped_agents:
+					porjects_with_stoppped_agents[proj] = []
+				porjects_with_stoppped_agents[proj].append(ag)
+
+	for proj in porjects_with_stoppped_agents:
+		for ag in porjects_with_stoppped_agents[proj]:
+			projects[proj]["agent_pid_dict"].pop(ag)
+			print("Detected agent "+ag+" from project "+proj+" stopped.")
+
 
 def sigint_handler(*args):
 	print("\n\nAll running agents on any project (if any) will be stopped...")
@@ -197,30 +212,32 @@ def kill_process(proc):
 
 # Function that returns the pid of the process in which the agent_0 is running based on the window name, which is: CLOUDBOOK_agent_0_(<project_name>)
 def get_pid_agent_0_windows(project_name):
-	import re
-
-	output = subprocess.Popen('tasklist /FI \"WindowTitle eq CLOUDBOOK_agent_0_('+project_name+')\"', shell=True, stdout=subprocess.PIPE)
+	output = subprocess.Popen('tasklist /FI \"WindowTitle eq CLOUDBOOK_agent_0_('+project_name+')\" | findstr py', shell=True, stdout=subprocess.PIPE)
 	response = output.communicate()
 	decoded_response = response[0].decode("utf-8")
 
-	lines_response = decoded_response.split("\r\n")				# Response should be composed of 5 lines (more if run several instances)
-	for lineno in range(0, len(lines_response)):
-		line = lines_response[lineno]
-		if lineno>=3 and lineno<len(lines_response)-1:			# Only the 4th line is interesting
-			line_single_spaced = re.sub(r"\s\s+", " ", line)	# Trim multiple spaces (substitute for only 1 space)
-			line_split = line_single_spaced.split(" ")			# Split by spaces
-			pid = int(line_split[1])							# Take the second argument (the PID)
-			return pid
+	# Processing of the command output
+	lines_response = decoded_response.split("\r\n")			# Response should be composed of 2 lines (more if run several instances. The last is empty)
+	print("len:", len(lines_response))
+	length = len(lines_response)
+	if length<=1:
+		raise Exception("The pid of the agent_0 terminal for the project " + project_name + " could not be retrieved. Process is not running.")
+	else:
+		if length !=2:
+			print("WARNING: Probably more than one instance of the agent_0 terminal for the project " + project_name + " is running.")
+		line_single_spaced = re.sub(r"\s\s+", " ", lines_response[0])	# Trim multiple spaces (substitute for only 1 space)
+		line_split = line_single_spaced.split(" ")						# Split by spaces
+		pid = int(line_split[1])										# Take the second argument (the PID)
+		return pid
 
 
 # Function that returns the pid of the process in which the agent_0 is running based on the window name, which is: CLOUDBOOK_agent_0_(<project_name>)
 def get_pid_agent_0_unix(project_name):
-	import re
-
 	output = subprocess.Popen("ps -ef | grep '[p]ython3 agent.py -agent_id agent_0 -project_folder "+project_name+"'", shell=True, stdout=subprocess.PIPE)
 	response = output.communicate()
 	decoded_response = response[0].decode("utf-8")
 
+	# Processing of the command output
 	pids = []
 	ppids = []
 	lines_response = decoded_response.split("\n")			# Response should be composed of 3 lines (more if run several instances)
@@ -230,9 +247,9 @@ def get_pid_agent_0_unix(project_name):
 		line_split = line_single_spaced.split(" ")			# Split by spaces
 		pid = int(line_split[1])							# Take the second argument (the PID)
 		ppid = int(line_split[2])							# Take the third argument (the PPID)
-		if pid in ppids:		# If the PID matches one of previous PPIDs it is the PID of the main agent process (it spawns child)
+		if pid in ppids:		# If the PID matches one of previous PPIDs it is the PID of the main agent process
 			return pid
-		if ppid in pids:		# If the PPID matches one of previous PIDs it is the PID of the main agent process (this was spawned by it)
+		if ppid in pids:		# If the PPID matches one of previous PIDs it is the PID of the main agent process
 			return ppid
 		# If there are not matches, append each to their list
 		pids.append(pid)
@@ -344,10 +361,6 @@ class GeneralInfoTab (ttk.Frame):
 				print("Aborting agent", agent_id, "launch...")
 				return
 
-		class Dummy:
-			def __init__(self):
-				self.pid = None
-
 		print("Launching agent", agent_id)
 
 		# Create the basic agent command (os generic)
@@ -364,11 +377,13 @@ class GeneralInfoTab (ttk.Frame):
 				full_command = "start \"CLOUDBOOK_agent_0_("+self.project_name+")\" " + full_command
 				subprocess.Popen(full_command, shell=True, creationflags=subprocess.CREATE_NEW_CONSOLE)
 
-				proc = Dummy()
-				while not proc.pid:
-					time.sleep(1)
+				proc = None
+				while not proc:
+					time.sleep(0.3)
 					try:
-						proc.pid = get_pid_agent_0_windows(self.project_name)
+						proc_pid = get_pid_agent_0_windows(self.project_name)
+						if proc_pid:
+							proc = psutil.Process(proc_pid)
 					except:
 						print("The pid of the agent_0 terminal could not be retrieved. Retrying...")
 			else:
@@ -384,24 +399,29 @@ class GeneralInfoTab (ttk.Frame):
 					full_command = "gnome-terminal --title=\"CLOUDBOOK_agent_0_("+self.project_name+")\" -- " + full_command
 					subprocess.Popen(full_command, shell=True, preexec_fn=os.setsid)
 
-					proc = Dummy()
-					while not proc.pid:
-						time.sleep(1)
+					proc = None
+					while not proc:
+						time.sleep(0.3)
 						try:
-							proc.pid = get_pid_agent_0_unix(self.project_name)
+							proc_pid = get_pid_agent_0_unix(self.project_name)
+							if proc_pid:
+								proc = psutil.Process(proc_pid)
 						except:
 							print("The pid of the agent_0 terminal could not be retrieved. Retrying...")
+
 				# If the lxterminal is installed (Raspbian)
 				elif tool_exists("lxterminal"):
 					print("Using new lxterminal as terminal emulator for agent_0.")
 					full_command = "lxterminal --title=\"CLOUDBOOK_agent_0_("+self.project_name+")\" -e '" + full_command + "'"
 					subprocess.Popen(full_command, shell=True, preexec_fn=os.setsid)
 
-					proc = Dummy()
-					while not proc.pid:
-						time.sleep(1)
+					proc = None
+					while not proc:
+						time.sleep(0.3)
 						try:
-							proc.pid = get_pid_agent_0_unix(self.project_name)
+							proc_pid = get_pid_agent_0_unix(self.project_name)
+							if proc_pid:
+								proc = psutil.Process(proc_pid)
 						except:
 							print("The pid of the agent_0 terminal could not be retrieved. Retrying...")
 				# If no supported terminal is installed, launch in the same window as the GUI (as any other agent)

@@ -3,7 +3,7 @@
 from werkzeug.serving import WSGIRequestHandler
 from flask import Flask, request	# Requires pip3 install flask
 from pynat import get_ip_info		# Requires pip3 install pynat
-import requests 					# Requires pip install requests
+import requests 					# Requires pip3 install requests
 import socket
 
 # Multi thread/process
@@ -11,6 +11,7 @@ import time
 import threading
 from multiprocessing import Process, Queue, Value, Array
 import signal
+import psutil						# Requires pip3 install psutil
 
 # System, files
 import os, sys, platform
@@ -604,13 +605,25 @@ def flaskThreaded(port, sock=None):
 	if sock:
 		sock.close()
 	application.run(debug=False, host="0.0.0.0", port=port, threaded=True)
-	# import psutil
-	# num_cores = psutil.cpu_count()
-	# print("The number of cores of the machine is:", num_cores)
-	# application.run(debug=False, host="0.0.0.0", port=port, threaded=False, processes=num_cores)
-	# global first_launch
-	# first_launch = False
 	print("00000000000000000000000000000000000000000000000000000000000000000000000000")
+
+
+# This function terminates this process if the parent process is terminated.
+def die_with_parent(ppid):
+	psutil.Process(ppid).wait()
+	print("The main Agent process ended leaving the Flask process orphan. Stopping it...")
+	os._exit(1)
+
+# This function terinates this process if the flask process is terminated when if must not.
+def die_with_flask_proc(pid, version):
+	try:
+		psutil.Process(pid).wait()
+	except:
+		pass
+	# Only terminate this process if the flask process version is the original
+	if flask_proc_ver==version:
+		print("The Flask process ended when it must not. Stopping the agent...")
+		os._exit(1)
 
 
 # This function gets the global session object (creates it if it does not exist yet)
@@ -622,8 +635,11 @@ def get_session():
 
 
 # This function is used in a new process. It is in charge of handling the queues for data exchange (and load DUs) to allow Flask execution.
-def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue_param,\
+def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue_param, ppid,\
 						stdin_stream, value_var_grant_param, array_var_ip_param, value_var_port_param):
+	# Thread which makes this process suicide if parent dies
+	flask_thread = threading.Thread(target=die_with_parent, args=[ppid], daemon=True).start()
+
 	global mp_stats_queue
 	mp_stats_queue = mp_stats_queue_param
 	global value_var_grant
@@ -644,7 +660,7 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 	global project_path
 	start_port_search = 5000
 
-	# launch vars:
+	# launch_info vars:
 	global session 			# HTTP session used to launch/receive all conections (using only one port)
 	session = None
 	get_session()
@@ -657,9 +673,6 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 	global du_list
 	global loaded_du_list
 
-	# local_port = None
-	# global first_launch
-	# first_launch = True
 	while True:
 		while not mp_agent2flask_queue.empty():
 			item = mp_agent2flask_queue.get()
@@ -899,11 +912,13 @@ def init_flask_process_and_check_ok(cold_redeploy):
 					mp_flask2agent_queue = Queue()
 
 					# Terminate and create a new FlaskProcess
+					flask_proc_ver += 1
 					flask_proc.terminate()
-					proc_args = (mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue,\
+					proc_args = (mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue, os.getpid(),\
 								 stdin_stream, value_var_grant, array_var_ip, value_var_port)
 					flask_proc = Process(target=flaskProcessFunction, args=proc_args)
 					flask_proc.start()
+					threading.Thread(target=die_with_flask_proc, args=(flask_proc.pid, flask_proc_ver)).start()
 
 					# Pass initial info and launch
 					mp_agent2flask_queue.put(init_info_item)
@@ -1136,11 +1151,13 @@ if __name__ == "__main__":
 	mp_flask2agent_queue = Queue()
 	mp_stats_queue = Queue()
 
-	# Launch the FlaskProcess
-	proc_args = (mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue,\
+	# Launch the FlaskProcess and the thread that checks if it stops when it must not.
+	flask_proc_ver = 0
+	proc_args = (mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue, os.getpid(),\
 				 stdin_stream, value_var_grant, array_var_ip, value_var_port)
 	flask_proc = Process(target=flaskProcessFunction, args=proc_args)
 	flask_proc.start()
+	threading.Thread(target=die_with_flask_proc, args=(flask_proc.pid, flask_proc_ver)).start()
 
 	# Launch the stats file creator thread
 	threading.Thread(target=create_stats, args=(agent_stats_interval,)).start()
@@ -1234,6 +1251,8 @@ if __name__ == "__main__":
 	# Forever loop (check grant modifications, write grant_XX_file, check and handle redeploy requests)
 	time_start = time.monotonic()
 	while True:
+		if not flask_proc.is_alive():
+			os._exit(1)
 		# Load agent config file and update grant. Note: fspath changes are not taken into account while executing
 		dict_for_grant_check = loader.load_dictionary(project_path + os.sep + "agents" + os.sep + "config_"+my_agent_ID+".json")
 		grant_in_file = dict_for_grant_check["GRANT_LEVEL"]
@@ -1264,7 +1283,6 @@ if __name__ == "__main__":
 				
 			if cold_redeploy:
 				print("Executing COLD_REDEPLOY...")
-				flask_proc.terminate()
 				local_port = init_flask_process_and_check_ok(cold_redeploy=True)
 
 				# Update the port (from None to the local_port) in the case of a lan_mode is active

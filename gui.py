@@ -160,14 +160,13 @@ def get_info():
 	porjects_with_stoppped_agents = {}
 	for proj in projects:
 		for ag in projects[proj]["agent_pid_dict"]:
-			#running = psutil.pid_exists(projects[proj]["agent_pid_dict"][ag].pid)			# Fastest alternative
 			running = projects[proj]["agent_pid_dict"][ag].is_running()
-			if platform.system()!="Windows":	# In UNIX
+			if platform.system()!="Windows" and running:	# In UNIX
 				zombie = projects[proj]["agent_pid_dict"][ag].status()==psutil.STATUS_ZOMBIE
 				running = running and not zombie
 				if zombie:
 					kill_process(projects[proj]["agent_pid_dict"][ag])
-			builtins.print("proj:", proj, "\tagent:", ag, "\tpid:", projects[proj]["agent_pid_dict"][ag].pid, "\trunning:", running)
+			#print("proj:", proj, "\tagent:", ag, "\tpid:", projects[proj]["agent_pid_dict"][ag].pid, "\trunning:", running)
 			if not running:
 				if proj not in porjects_with_stoppped_agents:
 					porjects_with_stoppped_agents[proj] = []

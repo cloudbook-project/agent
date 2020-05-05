@@ -597,7 +597,7 @@ def edit_agent(agent_id, project_name, new_grant='', new_fs=''):
 
 
 # This function launches the flask server in the port given as parameter.
-def flaskThreaded(port, sock=None):
+def flaskAppThreadFunction(port, sock=None):
 	port = int(port)
 	print("Launching in port:", port)
 	if not verbose:
@@ -609,13 +609,13 @@ def flaskThreaded(port, sock=None):
 
 
 # This function terminates this process if the parent process is terminated.
-def die_with_parent(ppid):
+def parentAliveWatcherThreadFunction(ppid):
 	psutil.Process(ppid).wait()
 	print("The main Agent process ended leaving the Flask process orphan. Stopping it...")
 	os._exit(1)
 
 # This function terinates this process if the flask process is terminated when if must not.
-def die_with_flask_proc(pid, version):
+def childAliveWatcherThreadFunction(pid, version):
 	try:
 		psutil.Process(pid).wait()
 	except:
@@ -638,7 +638,7 @@ def get_session():
 def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_queue_param, ppid,\
 						stdin_stream, value_var_grant_param, array_var_ip_param, value_var_port_param):
 	# Thread which makes this process suicide if parent dies
-	flask_thread = threading.Thread(target=die_with_parent, args=[ppid], daemon=True).start()
+	flask_thread = threading.Thread(target=parentAliveWatcherThreadFunction, args=[ppid], daemon=True).start()
 
 	global mp_stats_queue
 	mp_stats_queue = mp_stats_queue_param
@@ -707,10 +707,10 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 					WSGIRequestHandler.protocol_version = "HTTP/1.1"
 					if not cold_redeploy:
 						(local_port, sock) = get_port_available(port=start_port_search)
-						flask_thread = threading.Thread(target=flaskThreaded, args=[local_port, sock], daemon=True)
+						flask_thread = threading.Thread(target=flaskAppThreadFunction, args=[local_port, sock], daemon=True)
 					else:
 						local_port = start_port_search
-						flask_thread = threading.Thread(target=flaskThreaded, args=[local_port], daemon=True)
+						flask_thread = threading.Thread(target=flaskAppThreadFunction, args=[local_port], daemon=True)
 					flask_thread.start()
 
 					# Set up the werkzeug logger
@@ -918,7 +918,7 @@ def init_flask_process_and_check_ok(cold_redeploy):
 								 stdin_stream, value_var_grant, array_var_ip, value_var_port)
 					flask_proc = Process(target=flaskProcessFunction, args=proc_args)
 					flask_proc.start()
-					threading.Thread(target=die_with_flask_proc, args=(flask_proc.pid, flask_proc_ver)).start()
+					threading.Thread(target=childAliveWatcherThreadFunction, args=(flask_proc.pid, flask_proc_ver)).start()
 
 					# Pass initial info and launch
 					mp_agent2flask_queue.put(init_info_item)
@@ -1157,7 +1157,7 @@ if __name__ == "__main__":
 				 stdin_stream, value_var_grant, array_var_ip, value_var_port)
 	flask_proc = Process(target=flaskProcessFunction, args=proc_args)
 	flask_proc.start()
-	threading.Thread(target=die_with_flask_proc, args=(flask_proc.pid, flask_proc_ver)).start()
+	threading.Thread(target=childAliveWatcherThreadFunction, args=(flask_proc.pid, flask_proc_ver)).start()
 
 	# Launch the stats file creator thread
 	threading.Thread(target=create_stats, args=(agent_stats_interval,)).start()

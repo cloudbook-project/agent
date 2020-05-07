@@ -212,51 +212,11 @@ def invoke(configuration = None):
 		if "params" in request_data:
 			params = request_data["params"]
 
-	# If the json content does not exist (old format of request) ############ DELETE (se queda de momento para el deployer_run)###########
+	# If the json content does not exist (old format of request)
 	else:
-		print("This request has the old format")
-		print("REQUEST.form: ", request.form)
-		du_and_invoked_function = request.args.get('invoked_function') 			# Must always exist
-		invoker_function = request.args.get('invoker_function', None) 			# Defaults to None if it does not exist
-		
-		(invoked_du, invoked_function) = du_and_invoked_function.split(".") 	# Separate du and function
-
-		for i in request.form:
-			invoked_data = i
-
-		print("invoked_du:", invoked_du)
-		print("invoked_function:", invoked_function)
-		print("invoker_function:", invoker_function)
-		print("invoked_data:", invoked_data)
-
-		print("du_list:", du_list)
-
-		#raise Exception("Old invocation syntax is now not supported")
-		# Queue data stats
-		stats_data = {}
-		stats_data['invoked'] = invoked_function
-		stats_data['invoker'] = invoker_function
-		mp_stats_queue.put(stats_data)
-
-		# If the function belongs to the agent
-		if invoked_du in du_list:
-			while invoked_du not in loaded_du_list:
-				print("The function belongs to the agent, but it has not been loaded yet.")
-				time.sleep(1)
-
-			if "%3d" in invoked_data:
-				invoked_data = invoked_data.replace("%3d","=")
-			try:
-				eval_result = eval(invoked_du+"."+invoked_function+"("+invoked_data+")")
-			except:
-				eval_result = eval(invoked_du+"."+invoked_function+"('"+invoked_data+"')")
-		# If the function does not belong to this agent
-		else:
-			print("This function does not belong to this agent.")
-			eval_result = "none"
-
-		return eval_result if eval_result is not None else ""
-		################################## OLD REQUEST FORMAT END ##############################################
+		if request.args.get('invoked_function', None)=="du_0.main" and my_agent_ID=="agent_0":
+			print("This request has the old format, which is deprecated. Update your cloudbook deployer.")
+		raise Exception("Request does not contain a json invocation dictionary")
 
 	# Print the data obtained from the request (and du_list)
 	print("Invocation dictionary:", "\n", 				\

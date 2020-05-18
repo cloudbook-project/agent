@@ -114,7 +114,7 @@ NAME:
   agent.py - Allows to create, delete, edit and launch cloudbook agents.
 
 SYNOPSIS:
-  agent.py {create|delete|edit|launch} <options>
+  agent.py (create|delete|edit|launch) <options>
 
 USSAGE:
   agent.py create [-agent_0] -project_folder <project_folder> -grant (HIGH|MEDIUM|LOW) [-verbose] [-help|-syntax|-info]
@@ -164,7 +164,7 @@ OPTIONS
     [-help|-syntax|-info]               Shows launch help and terminates.
 
   No mode:
-    -help                               Show this full help page and terminates.
+    (-help|-syntax|-info)               Shows this full help page and terminates.
 
 """
 CREATE_HELP = \

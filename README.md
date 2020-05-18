@@ -67,26 +67,51 @@ _Important note: the GUI is the most recommended method to control the agent for
 
 It is possible to launch the GUI and the agent through a console command, which admits parameters to modify the default behaviour of these. Here is a small manual for this use. **This is only recommended for developers or advanced users**.
 
-* The GUI has the following console syntax:
-	`gui.py [-verbose] [-help|-syntax|-info]`
+* The GUI has the following possible console syntaxes:
+	`gui.py [-verbose]`
+	`gui.py (-help|-syntax|-info)`
+
 	Example: `gui.py -verbose`
-	Options:
-	* _Optional_:
-		**-verbose**: This option will make the agents print cloudbook information.
-		**-help, -syntax, -info**: this option will print this help and syntax info and terminate.
 
 
-* The agent has the following console syntax:
-	`agent.py -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-help|-syntax|-info]`
-	Example: `agent.py -agent_id agent_S4MY6ZGKQRT8RTVWLJZP -project_folder NBody -verbose`
-	Options:
-	* _Mandatory_:
-		**-agent_id `<agent_id>`**: this option is used to specify the name of the agent to launch.
-		**-project_folder `<project_folder>`**: this option is used to specify the name of the folder containing the agent.
-	* _Optional_:
-		**-verbose**: this option will make the agent print cloudbook information.
-		**-help, -syntax, -info**: this option will print this help and syntax info and terminate.
+* The agent has the following possible console syntaxes:
+	`agent.py create [-agent_0] -project_folder <project_folder> -grant (HIGH|MEDIUM|LOW) [-verbose] [-help|-syntax|-info]`
+	`agent.py delete -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-help|-syntax|-info]`
+	`agent.py edit -agent_id <agent_id> -project_folder <project_folder> -grant (HIGH|MEDIUM|LOW) [-verbose] [-help|-syntax|-info]`
+	`agent.py launch -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-help|-syntax|-info]`
+	`agent.py (-help|-syntax|-info)`
+
+	Example: `agent.py launch -agent_id agent_S4MY6ZGKQRT8RTVWLJZP -project_folder NBody -verbose`
+
+	As it can be seen, each of the functioning modes (create, delete, edit, launch) has a different set of possibe options:
+	* _Mode 'create'_: allows to create a new agent. A random agent_id will be used unless option -agent_0 is used.
+		**[-agent_0]**                          Makes the program create the agent_0 instead a random one.
+		**-project_folder <project_folder>**    The name of the folder in which the agent will be created.
+		**-grant <HIGH|MEDIUM|LOW>**            The grant level of the agent to be created.
+		**[-verbose]**                          Makes the program output traces by console. Intended for debugging.
+		**[-help|-syntax|-info]**               Shows create help and terminates.
+
+	* _Mode 'delete'_: allows to delete an existing agent. If it does not exist, does nothing.
+		**-agent_id <agent_id>**                The name of the agent to be deleted.
+		**-project_folder <project_folder>**    The name of the folder in which the agent is located.
+		**[-verbose]**                          Makes the program output traces by console. Intended for debugging.
+		**[-help|-syntax|-info]**               Shows delete help and terminates.
+
+	* _Mode 'edit'_: allows to modify the grant level of an existing agent. If it does not exist, does nothing.
+		**-agent_id <agent_id>**                The name of the agent to be edited.
+		**-project_folder <project_folder>**    The name of the folder in which the agent is located.
+		**-grant <HIGH|MEDIUM|LOW>**            The new grant level of the agent.
+		**[-verbose]**                          Makes the program output traces by console. Intended for debugging.
+		**[-help|-syntax|-info]**               Shows edit help and terminates.
+
+	* _Mode 'launch'_: allows to launch an existing agent. If it does not exist, does nothing.
+		**-agent_id <agent_id>**                The name of the agent to be launched.
+		**-project_folder <project_folder>**    The name of the folder in which the agent is located.
+		**[-verbose]**                          Makes the program output traces by console. Intended for debugging.
+		**[-help|-syntax|-info]**               Shows launch help and terminates.
+
+	* _No mode_:
+		**(-help|-syntax|-info)**               Shows this full help page and terminates.
 
 _Note: the order of the options is not relevant in any of the programs._
-_Note 2: unrecognized options will be ignored._
-_Note 3: it is possible to do all tasks using the command line, though, this is not recommended because if the program leaves in abnormal conditions the agent may leave open subprocesses (which have to be closed manually with the task manager or similar)._
+_Note 2: unrecognized options will be ignored (you will be alerted though if verbose is ON)._

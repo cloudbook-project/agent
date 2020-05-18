@@ -33,10 +33,7 @@ my_agent_ID = None
 my_project_folder = None
 
 # Indicator of verbosity or silent mode
-verbose = False
-
-# Indicator of logginng level (to file)
-#log_to_file = False
+verbose = True
 
 # Dictionary of agents 
 cloudbook_dict_agents = {}
@@ -87,15 +84,12 @@ cloudbook_version = 0
 
 
 #####   CONSTANTS   #####
-CRIT_ERR_NO_ANSWER = "CLOUDBOOK CRITICAL ERROR: no agent could answer the remote invocation to a function in a critical DU. \
-The DU state is lost and program is corrupt. Critical alarm created in the distributed filesystem in order that deployer's \
-surveillance monitor knows that an invocation has failed. The Flask process will be stopped and restarted."
 ERR_IP_NOT_FOUND = "ERROR: cannot find the ip and port for invoking the desired agent."
 ERR_QUEUE_KEY_VALUE = "ERROR: there was a problem item obtained from the queue. Wrong key/value."
-ERR_READ_WRITE = "ERROR: reading/writing not allowed or wrong path."
+ERR_READ_WRITE = "ERROR: reading/writing not allowed or wrong path. Retrying..."
 ERR_FLASK_PORT_IN_USE = "ERROR: this agent is using a port that was checked to be free but, due to race conditions, another \
-agent did the same and started using it before."
-ERR_DUS_NOT_EXIST = "ERROR: cannot load the specified DU(s), because file(s) do not exist."
+agent did the same and started using it before. The flask process will be restarted automatically."
+WAR_DUS_NOT_EXIST = "WARNING: cannot load the specified DU(s), because file(s) do not exist. Retrying..."
 GEN_ERR_LAUNCHING_FLASK = "GENERIC ERROR: something went wrong when launching the flask thread."
 GEN_ERR_LOADING_DUS = "GENERIC ERROR: something went wrong when loading DUs."
 ERR_DUS_ALREADY_LOADED = "ERROR: a list of DU(s) has already been loaded."
@@ -105,56 +99,162 @@ did not accept the request."
 GEN_ERR_RESTARTING_FLASK = "GENERIC ERROR: something went wrong when restarting the flask process."
 GEN_ERR_INIT_CHECK_FLASK = "GENERIC ERROR: something went wrong when initializing of checking that FlaskProcess was up and \
 running correctly."
-ERR_GET_PROJ_ID_REFUSED = "ERROR: conection refused when FlaskProcess was trying to check the id of the agent running on the \
+WAR_GET_PROJ_ID_REFUSED = "WARNING: conection refused when FlaskProcess was trying to check the id of the agent running on the \
 requested port."
-ERR_LOAD_CRIT_DU_CLOUDBOOK_RUNNING = "ERROR: cloudbook is already running and critical dus should not be loaded at this \
+WAR_LOAD_CRIT_DU_CLOUDBOOK_RUNNING = "WARNING: cloudbook is already running and critical dus should not be loaded at this \
 point in order to avoid unexpected behaviours due to global variables may have lost their state."
 ERR_NO_JSONIZABLE = "ERROR: cannot convert the invocation parameters into json."
 ERR_NO_JSON_RESPONSE = "ERROR: there was not json information in the response."
 
-COMMAND_SYNTAX = "\
- ____________________________________________________________________________________________________________ \n\
-|                                                                                                            |\n\
-| SYNTAX:                                                                                                    |\n\
-|   agent.py -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-help|-syntax|-info]          |\n\
-|                                                                                                            |\n\
-| EXAMPLE:                                                                                                   |\n\
-|   agent.py -agent_id agent_S4MY6ZGKQRT8RTVWLJZP -project_folder NBody -verbose                             |\n\
-|                                                                                                            |\n\
-| OPTIONS:                                                                                                   |\n\
-|   Mandatory:                                                                                               |\n\
-|     -agent_id <agent_id>                <agent_id> is the name of the agent to launch.                     |\n\
-|     -project_folder <project_folder>    <project_folder> is the name of the folder containing the agent.   |\n\
-|                                                                                                            |\n\
-|   Optional:                                                                                                |\n\
-|     -verbose                            This option will make the agent print cloudbook information.       |\n\
-|     -help, -syntax, -info               This option will print this help and syntax info and terminate.    |\n\
-|                                                                                                            |\n\
-| Note: the order of the options is not relevant. Unrecognized options will be ignored.                      |\n\
-|____________________________________________________________________________________________________________|"
+ERR_SYNTAX = "Incorrect syntax: for more info type 'agent.py -help'"
+
+FULL_HELP = \
+"""
+NAME:
+  agent.py - Allows to create, delete, edit and launch cloudbook agents.
+
+SYNOPSIS:
+  agent.py {create|delete|edit|launch} <options>
+
+USSAGE:
+  agent.py create [-agent_0] -project_folder <project_folder> -grant (HIGH|MEDIUM|LOW) [-verbose] [-help|-syntax|-info]
+  agent.py delete -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-help|-syntax|-info]
+  agent.py edit -agent_id <agent_id> -project_folder <project_folder> -grant (HIGH|MEDIUM|LOW) [-verbose] [-help|-syntax|-info]
+  agent.py launch -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-help|-syntax|-info]
+  agent.py (-help|-syntax|-info)
+
+EXAMPLES:
+  agent.py create -agent_0 -project_folder hanoi -grant MEDIUM
+  agent.py delete -agent_id agent_6Q291JDWX0WJ3EI6Y1NZ -project_folder hanoi -grant MEDIUM
+  agent.py edit -agent_id agent_LCXEP7SYDDW51SJ0Z9VE -project_folder test -grant MEDIUM
+  agent.py launch -agent_id agent_S4MY6ZGKQRT8RTVWLJZP -project_folder NBody -verbose
+  agent.py -help
+
+DESCRIPTION:
+  agent.py allows to create, delete, edit and launch cloudbook agents.
+  The agent_id may be 'agent_0' or 'agent_'followed by a 20 alfanumeric charancters string (only uppercase and numbers).
+  Using -help with a mode set will display help only for that mode. This full help can be displayed using 'agent.py -help'.
+  Note: the order of the options is not relevant. Unrecognized options will be ignored.
+
+OPTIONS
+  Mode 'create': allows to create a new agent. A random agent_id will be used unless option -agent_0 is used.
+    [-agent_0]                          Makes the program create the agent_0 instead a random one.
+    -project_folder <project_folder>    The name of the folder in which the agent will be created.
+    -grant <HIGH|MEDIUM|LOW>            The grant level of the agent to be created.
+    [-verbose]                          Makes the program output traces by console. Intended for debugging.
+    [-help|-syntax|-info]               Shows create help and terminates.
+
+  Mode 'delete': allows to delete an existing agent. If it does not exist, does nothing.
+    -agent_id <agent_id>                The name of the agent to be deleted.
+    -project_folder <project_folder>    The name of the folder in which the agent is located.
+    [-verbose]                          Makes the program output traces by console. Intended for debugging.
+    [-help|-syntax|-info]               Shows delete help and terminates.
+
+  Mode 'edit': allows to modify the grant level of an existing agent. If it does not exist, does nothing.
+    -agent_id <agent_id>                The name of the agent to be edited.
+    -project_folder <project_folder>    The name of the folder in which the agent is located.
+    -grant <HIGH|MEDIUM|LOW>            The new grant level of the agent.
+    [-verbose]                          Makes the program output traces by console. Intended for debugging.
+    [-help|-syntax|-info]               Shows edit help and terminates.
+
+  Mode 'launch': allows to launch an existing agent. If it does not exist, does nothing.
+    -agent_id <agent_id>                The name of the agent to be launched.
+    -project_folder <project_folder>    The name of the folder in which the agent is located.
+    [-verbose]                          Makes the program output traces by console. Intended for debugging.
+    [-help|-syntax|-info]               Shows launch help and terminates.
+
+  No mode:
+    -help                               Show this full help page and terminates.
+
+"""
+CREATE_HELP = \
+"""
+Displaying help for create.
+
+Ussage:
+  agent.py create [-agent_id <agent_id>] -project_folder <project_folder> -grant (HIGH|MEDIUM|LOW) [-verbose] [-help|-syntax|-info]
+
+Description
+  Allows to create a new agent. A random agent_id will be used unless option -agent_0 is used.
+
+Create options:
+  [-agent_0]                          Makes the program create the agent_0 instead a random one.
+  -project_folder <project_folder>    The name of the folder in which the agent will be created.
+  -grant <HIGH|MEDIUM|LOW>            The grant level of the agent to be created.
+  [-verbose]                          Makes the program output traces by console. Intended for debugging.
+  [-help|-syntax|-info]               Shows create help and terminates.
+"""
+DELETE_HELP = \
+"""
+Displaying help for delete.
+
+Ussage:
+  agent.py delete -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-help|-syntax|-info]
+
+Description
+  Allows to delete an existing agent. If it does not exist, does nothing.
+
+Delete options:
+  -agent_id <agent_id>                The name of the agent to be deleted.
+  -project_folder <project_folder>    The name of the folder in which the agent is located.
+  [-verbose]                          Makes the program output traces by console. Intended for debugging.
+  [-help|-syntax|-info]               Shows delete help and terminates.
+"""
+EDIT_HELP = \
+"""
+Displaying help for edit.
+
+Ussage:
+  agent.py edit -agent_id <agent_id> -project_folder <project_folder> -grant (HIGH|MEDIUM|LOW) [-verbose] [-help|-syntax|-info]
+
+Description
+  Allows to modify the grant level of an existing agent. If it does not exist, does nothing.
+
+Edit options:
+  -agent_id <agent_id>                The name of the agent to be edited.
+  -project_folder <project_folder>    The name of the folder in which the agent is located.
+  -grant <HIGH|MEDIUM|LOW>            The new grant level of the agent.
+  [-verbose]                          Makes the program output traces by console. Intended for debugging.
+  [-help|-syntax|-info]               Shows edit help and terminates.
+"""
+
+LAUNCH_HELP = \
+"""
+Displaying help for launch.
+
+Ussage:
+  agent.py launch -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-help|-syntax|-info]
+
+Description
+  Allows to launch an existing agent. If it does not exist, does nothing.
+
+Launch options:
+  -agent_id <agent_id>                The name of the agent to be launched.
+  -project_folder <project_folder>    The name of the folder in which the agent is located.
+  [-verbose]                          Makes the program output traces by console. Intended for debugging.
+  [-help|-syntax|-info]               Shows launch help and terminates.
+"""
 
 
 
 #####   OVERLOAD BUILT-IN FUNCTIONS   #####
 
 # Print function overloaded in order to make it print the id before anything and keep track of the traces of each agent easier.
-def print(*args, **kwargs):
-	# If the print is just a separation, i.e.:  print()  keep it like that
-	if (len(args)==0 and len(kwargs)==0) or (len(args)==1 and len(kwargs)==0 and args[0]==''):
-		builtins.print()
-		return
-
-	# If the agent ID has been already set
-	if my_agent_ID is not None:
-		if verbose:
-			if my_agent_ID == "agent_0": 	# For the agent_0 add dots to make it start at the same letter column in the console
+def print(*args, force_print=False, **kwargs):
+	# Only print if verbose mode is enabled
+	if verbose or force_print:
+		if my_agent_ID is None: 				# If no agent_id is set, do a normal print
+			builtins.print(*args, **kwargs)
+		else:									# If agent_id is set, print its ID and colon before the string
+			if my_agent_ID == "agent_0": 			# For the agent_0 add dots to make strings start at the same letter column in the console
 				builtins.print(my_agent_ID + "...................:", *args, **kwargs)
 			else:
 				builtins.print(my_agent_ID + ":", *args, **kwargs)
-		else:
-			pass
-	else: 	# For the case in which the ID is None, print it with the normal built-in
-		builtins.print(*args, **kwargs)
+
+
+# Alias to call the overloaded builtin function with the force_print parameter set to True
+def PRINT(*args, **kwargs):
+	print(*args, force_print=True, **kwargs)
 
 
 
@@ -350,7 +450,7 @@ def outgoing_invoke(invocation_dict, configuration = None):
 			desired_host_ip_port = invocation_agents_grant[remote_agent]['IP'] + ":" + str(invocation_agents_grant[remote_agent]['PORT'])
 			print("Host ip and port: ", desired_host_ip_port)
 		except Exception as e:
-			print(ERR_IP_NOT_FOUND)
+			PRINT(ERR_IP_NOT_FOUND)
 			raise e 	# This should never happen
 
 		url = "http://"+desired_host_ip_port+"/invoke"
@@ -360,7 +460,7 @@ def outgoing_invoke(invocation_dict, configuration = None):
 			r = get_session().post(url, json=invocation_dict)
 			break	# Stop iterating over the possible agents (already got a responsive one)
 		except TypeError as e:
-			print(ERR_NO_JSONIZABLE)
+			PRINT(ERR_NO_JSONIZABLE)
 			raise e
 		except Exception as e:
 			print("POST request was not answered by " + remote_agent + " (IP:port --> " + desired_host_ip_port + ")")
@@ -375,7 +475,6 @@ def outgoing_invoke(invocation_dict, configuration = None):
 					while True:
 						time.sleep(1)
 						print("This agent has detected a problem and will be automatically restarted.")
-					# raise BaseException(CRIT_ERR_NO_ANSWER)
 				else: 	# If the du is NOT critical
 					print("The function that could not be invoked is in a NON-critical du: ", invoked_du + "." + invoked_function)
 					
@@ -403,7 +502,7 @@ def outgoing_invoke(invocation_dict, configuration = None):
 	try:
 		readed_response = r.json()
 	except Exception as e:
-		print(ERR_NO_JSON_RESPONSE)
+		PRINT(ERR_NO_JSON_RESPONSE)
 		raise e
 	print("Response received:", readed_response)
 
@@ -506,53 +605,107 @@ def __CLOUDBOOK__():
 # Checks the OS to adapt the path of the folders.
 # Generates a default configuration file that is edited and adapted afterwards.
 def create_agent(grant, project_name, fs=False, agent_0=False):
+	project_path = cloudbook_path + os.sep + project_name
 
-	# Check paths existence and create if they do not.
-	if not os.path.exists(cloudbook_path):
-		os.makedirs(cloudbook_path)
-	
-	poject_path = cloudbook_path + os.sep + project_name
+	# CHECK PARAMS
+	# Check if project exists
+	if not os.path.exists(project_path):
+		PRINT("ERROR: the project '" + project_name + "'does not exist.")
+		os._exit(1)
+	# Check if grant is valid
+	if grant not in ["HIGH", "MEDIUM", "LOW"]:
+		PRINT("ERROR: the grant '" + grant + "' is not valid.")
+		os._exit(1)
+
+	# If fs is not specified, use default (distributed folder inside project folder)
 	if not fs:
-		fs = poject_path + os.sep + "distributed"
-	if not os.path.exists(fs):
-		os.makedirs(fs)
+		fs = project_path + os.sep + "distributed"
 
-	# Create dictionary with the agent info
-	agent_config_dict = {} # = {"AGENT_ID": "0", "GRANT_LEVEL": "MEDIUM", "DISTRIBUTED_FS": fs+"/distributed"}
-	if agent_0:
-		id_num = 0
-	else:
-		id_num = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20))
-	agent_ID = "agent_" + str(id_num)
-	agent_config_dict['AGENT_ID'] = agent_ID
-	agent_config_dict['GRANT_LEVEL'] = grant
-	agent_config_dict['DISTRIBUTED_FS'] = fs
+	try:
+		# Create dictionary with the agent info
+		agent_config_dict = {} # = {"AGENT_ID": "0", "GRANT_LEVEL": "MEDIUM", "DISTRIBUTED_FS": ".../distributed"}
+		if agent_0:
+			id_num = 0
+		else:
+			id_num = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20))
+		agent_ID = "agent_" + str(id_num)
 
-	# Write dictionary in file
-	config_file_path = poject_path + os.sep + "agents" + os.sep + "config_"+agent_ID+".json"
-	loader.write_dictionary(agent_config_dict, config_file_path)
+		agent_config_dict['AGENT_ID'] = agent_ID
+		agent_config_dict['GRANT_LEVEL'] = grant
+		agent_config_dict['DISTRIBUTED_FS'] = fs
 
-	print("\n---  NEW AGENT CREATED  ----------------------------------------------------------------------------")
-	print("     Agent_id = ", id_num)
-	print("     Grant    = ", grant)
-	print("     FSPath   = ", fs)
-	print("----------------------------------------------------------------------------------------------------\n")
+		# Write dictionary in file
+		config_file_path = project_path + os.sep + "agents" + os.sep + "config_"+agent_ID+".json"
+		loader.write_dictionary(agent_config_dict, config_file_path)
+
+		print()
+		print("NEW AGENT CREATED:")
+		print("  ID       = ", agent_ID)
+		print("  Project  = ", project_name)
+		print("  Grant    = ", grant)
+		print("  FSPath   = ", fs)
+		print()
+	except Exception as e:
+		PRINT("ERROR: it was not possible to create the agent '" + agent_id + "' in the project '" + project_name + "'.")
+		os._exit(1)
+
+
+# This function is used by the GUI. Modifies the the grant level and/or the FS of the current agent according to the parameters given.
+def delete_agent(agent_id, project_name):
+	project_path = cloudbook_path + os.sep + project_name
+	config_agent_file_path = project_path + os.sep + "agents" + os.sep + "config_"+agent_id+".json"
+
+	# CHECK PARAMS
+	# Check if project exists
+	if not os.path.exists(project_path):
+		PRINT("ERROR: the project '" + project_name + "'does not exist.")
+		os._exit(1)
+	# Check if agent exists
+	if not os.path.exists(config_agent_file_path):
+		PRINT("ERROR: the agent '" + agent_id + "' does not exist in project '" + project_name + "'.")
+		os._exit(1)
+
+	try:
+		os.remove(config_agent_file_path)
+		print("The agent '" + agent_id + "' from the project '" + project_name + "' has been successfully deleted.")
+	except Exception as e:
+		PRINT("ERROR: the agent '" + agent_id + "' from the project '" + project_name + "' could not be deleted.")
+		os._exit(1)
 
 
 # This function is used by the GUI. Modifies the the grant level and/or the FS of the current agent according to the parameters given.
 def edit_agent(agent_id, project_name, new_grant='', new_fs=''):
 	if new_grant=='' and new_fs=='':
 		return
+	project_path = cloudbook_path + os.sep + project_name
+	config_agent_file_path = project_path + os.sep + "agents" + os.sep + "config_"+agent_id+".json"
 
-	config_agent_file_path = cloudbook_path + os.sep + project_name + os.sep + "agents" + os.sep + "config_"+agent_id+".json"
+	# CHECK PARAMS
+	# Check if project exists
+	if not os.path.exists(project_path):
+		PRINT("ERROR: the project '" + project_name + "' does not exist.")
+		os._exit(1)
+	# Check if agent exists
+	if not os.path.exists(config_agent_file_path):
+		PRINT("ERROR: the agent '" + agent_id + "' does not exist in project '" + project_name + "'.")
+		os._exit(1)
+	# Check if grant is valid
+	if new_grant not in ["HIGH", "MEDIUM", "LOW"]:
+		PRINT("ERROR: the grant '" + new_grant + "' is not valid.")
+		os._exit(1)
+
+	# Load current config
 	config_dict = loader.load_dictionary(config_agent_file_path)
 
 	if new_grant!='' and new_grant!=None:
 		config_dict["GRANT_LEVEL"] = new_grant
+		print("The agent '" + agent_id + "' from the project '" + project_name + "' now has a new grant: " + new_grant + ".")
 
 	if new_fs!='' and new_fs!=None:
 		config_dict["DISTRIBUTED_FS"] = new_fs
+		print("The agent '" + agent_id + "' from the project '" + project_name + "' now has a new fs: " + new_fs + ".")
 
+	# Write new config
 	loader.write_dictionary(config_dict, config_agent_file_path)
 
 
@@ -647,7 +800,7 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 
 					project_path = cloudbook_path + os.sep + my_project_folder
 				except Exception as e:
-					print(ERR_QUEUE_KEY_VALUE)
+					PRINT(ERR_QUEUE_KEY_VALUE)
 					raise e
 
 				# Allow input from console
@@ -661,7 +814,7 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 					launch 				= item["launch_info"]
 					cold_redeploy 		= item["launch_info"]["cold_redeploy"]
 				except Exception as e:
-					print(ERR_QUEUE_KEY_VALUE)
+					PRINT(ERR_QUEUE_KEY_VALUE)
 					raise e
 				try:
 					WSGIRequestHandler.protocol_version = "HTTP/1.1"
@@ -685,12 +838,12 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 						try:
 							resp = get_session().get("http://localhost:"+str(local_port)+"/get_project_agent_id")#, headers={'Connection':'close'})
 						except Exception as e:
-							print(ERR_GET_PROJ_ID_REFUSED)
+							print(WAR_GET_PROJ_ID_REFUSED)
 						try:
 							retrieved_project_id = resp.json()
 							break
 						except:
-							print(ERR_NO_JSON_RESPONSE)
+							PRINT(ERR_NO_JSON_RESPONSE)
 							retrieved_project_id = None
 						time.sleep(0.5)
 						print("Retrying...")
@@ -700,13 +853,12 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 						mp_queue_data["flask_proc_ok"] = {}
 						mp_queue_data["flask_proc_ok"]["local_port"] = local_port
 					else:
-						print(ERR_FLASK_PORT_IN_USE) # This is the 2nd flask in the same port (race conditions)
-						print("The flask process will be restarted automatically.")
+						PRINT(ERR_FLASK_PORT_IN_USE) # This is the 2nd flask in the same port (race conditions)
 						mp_queue_data["restart_flask_proc"] = ERR_FLASK_PORT_IN_USE
 					mp_flask2agent_queue.put(mp_queue_data)
 					cloudbook_version = 1
 				except Exception as e:
-					print(GEN_ERR_LAUNCHING_FLASK)
+					PRINT(GEN_ERR_LAUNCHING_FLASK)
 					raise e
 
 			elif "deploy_info" in item:
@@ -716,7 +868,7 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 					new_du_list 			= item["deploy_info"]["new_du_list"]
 					cloudbook_version += 1
 				except Exception as e:
-					print(ERR_QUEUE_KEY_VALUE)
+					PRINT(ERR_QUEUE_KEY_VALUE)
 					raise e
 
 				# Load the dus that could not be loaded and the new ones, if any
@@ -736,12 +888,12 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 						for du in not_loaded_du_list:
 							print("  Trying to load", du)
 							if is_critical(du) and cloudbook_is_running():
-								print("  ", ERR_LOAD_CRIT_DU_CLOUDBOOK_RUNNING)
+								print("  ", WAR_LOAD_CRIT_DU_CLOUDBOOK_RUNNING)
 								print("  ", du, "has been skipped (not loaded)")
 								continue
 							du_i_file_path = du_files_path + os.sep + du+".py"
 							while not os.path.exists(du_i_file_path):
-								print(ERR_DUS_NOT_EXIST)
+								print(WAR_DUS_NOT_EXIST)
 								time.sleep(1)
 							exec("global "+du, globals())
 							exec("import "+du, globals())
@@ -757,13 +909,14 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 							print("Not all DUs could be loaded.")
 
 					except Exception as e:
-						print(GEN_ERR_LOADING_DUS)
+						PRINT(GEN_ERR_LOADING_DUS)
 						raise e
 				else:
 					print("There are no new DUs to load.")
 
 			else:
-				print(ERR_QUEUE_KEY_VALUE)
+				PRINT(ERR_QUEUE_KEY_VALUE)
+				os._exit(1)
 
 		time.sleep(1)
 
@@ -786,7 +939,8 @@ def create_stats(t1):
 				invoker = item['invoker']
 				invoked = item['invoked']
 			except:
-				print(ERR_QUEUE_KEY_VALUE, "Stats queue needs invoker/invoked keys.")
+				PRINT(ERR_QUEUE_KEY_VALUE, "Stats queue needs invoker/invoked keys.")
+				os._exit(1)
 
 			try:
 				if invoker != None:
@@ -855,16 +1009,10 @@ def init_flask_process_and_check_ok(cold_redeploy):
 					flask_proc_ok = True
 					break
 				except Exception as e:
-					print(ERR_QUEUE_KEY_VALUE)
+					PRINT(ERR_QUEUE_KEY_VALUE)
 					raise e
 
 			elif "restart_flask_proc" in item:
-				# try:
-				# 	restart_reason = item["restart_flask_proc"]
-				# 	print(restart_reason)
-				# except Exception as e:
-				# 	print(ERR_QUEUE_KEY_VALUE)
-				# 	raise e
 				try:
 					print("Restarting the flask process...")
 					# Create new mp_queues (so that they are clear)
@@ -886,11 +1034,12 @@ def init_flask_process_and_check_ok(cold_redeploy):
 					break
 
 				except Exception as e:
-					print(GEN_ERR_RESTARTING_FLASK)
+					PRINT(GEN_ERR_RESTARTING_FLASK)
 					raise e
 
 			else:
-				print(ERR_QUEUE_KEY_VALUE)
+				PRINT(ERR_QUEUE_KEY_VALUE)
+				os._exit(1)
 
 		time.sleep(1)
 
@@ -1006,57 +1155,169 @@ if __name__ == "__main__":
 	# Program name is not parameter
 	args = sys.argv[:]
 	args.pop(0)
-	#print("Arguments:", args, "\n")
 
-	# Check if user asks for help
-	if any(i in args for i in ["-help", "-syntax", "-info"]):
-		print(COMMAND_SYNTAX)
-		os._exit(0)
+	# Process syntax: action (mode), options and parameters
+	try:
+		# Check if user asks for help
+		opt_help = False
+		if any(i in args for i in ["-help", "-syntax", "-info"]):
+			opt_help = True
 
-	# Assert existence of mandatory parameters
-	if "-agent_id" not in args:
-		print("The '-agent_id' parameter is mandatory. Note: must be followed by the <agent_id>.")
-		print("For more info type 'agent.py -help'")
+		# Check the action and pop the first argument
+		action = args[0]
+		args.pop(0)
+
+		# Check if user asks for help
+		if opt_help:
+			if action=="create":
+				PRINT(CREATE_HELP)
+			elif action=="delete":
+				PRINT(DELETE_HELP)
+			elif action=="edit":
+				PRINT(EDIT_HELP)
+			elif action=="launch":
+				PRINT(LAUNCH_HELP)
+			else:
+				PRINT(FULL_HELP)
+			os._exit(0)
+
+		# Check if action is not correct
+		if action not in ["create", "delete", "edit", "launch"]:
+			PRINT(ERR_SYNTAX)
+			os._exit(1)
+	except:
+		PRINT(ERR_SYNTAX)
 		os._exit(1)
-	if "-project_folder" not in args:
-		print("The '-project_folder' parameter is mandatory. Note: must be followed by the <project_folder>.")
-		print("For more info type 'agent.py -help'")
-		os._exit(1)
 
-	# Analyze parameters
-	agent_file = None
+	# Analyze the rest of the options
 	skip = False
+	arg_agent_id = None
+	arg_agent_0 = None
+	arg_project_folder = None
+	arg_grant = None
+	arg_verbose = False
 	try:
 		for i in range(len(args)):
 			if skip:
 				skip = False
 				continue
+
 			if args[i]=="-agent_id":
-				agent_file = args[i+1]
+				arg_agent_id = args[i+1]
 				skip = True
-				continue
-			if args[i]=="-project_folder":
-				my_project_folder = args[i+1]
+
+			elif args[i]=="-project_folder":
+				arg_project_folder = args[i+1]
 				skip = True
-				continue
-			if args[i]=="-verbose":
-				verbose = True
-				continue
-			# if args[i]=="-log":
-			# 	log_to_file = True
-			# 	continue
+
+			elif args[i]=="-grant":
+				arg_grant = args[i+1]
+				skip = True
+
+			elif args[i]=="-agent_0":
+				arg_agent_0 = True
+
+			elif args[i]=="-verbose":
+				arg_verbose = True
+			else:
+				print("WARNING: Unrecognized option '", args[i], "'.")
 	except Exception as e:
-		print("The syntax is not correct. Use:")
-		print("  agent.py -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-help|-syntax|-info]")
-		print("For more info type 'agent.py -help'")
+		PRINT(ERR_SYNTAX)
 		os._exit(1)
 
-	if verbose:
-		print("Parameters detected:")
-		print("agent_id:", agent_file)
-		print("project_folder:", my_project_folder)
-		print("verbose:", verbose)
-		# print("log:", log_to_file)
+	# Set verbose mode if detected
+	verbose = arg_verbose
+
+	print("Parameters detected:")
+	print(" action:", action)
+	print(" arg_agent_id:", arg_agent_id)
+	print(" arg_project_folder:", arg_project_folder)
+	print(" arg_grant:", arg_grant)
+	print(" arg_agent_0:", arg_agent_0)
+	print(" arg_verbose:", arg_verbose)
+	print()
+
+	# Execute the corresponding action
+	if action=="create":
+		if arg_agent_id:
+			print("WARNING: option '-agent_id <agent_id>' is not used in create mode.")
+		if not arg_project_folder:
+			PRINT("ERROR: option '-project_folder <project_folder>' is mandatory in create mode.")
+			PRINT(ERR_SYNTAX)
+			os._exit(1)
+		if not arg_grant:
+			PRINT("ERROR: option '-grant (HIGH|MEDIUM|LOW)' is mandatory in create mode.")
+			PRINT(ERR_SYNTAX)
+			os._exit(1)
+		create_agent(grant=arg_grant, project_name=arg_project_folder, agent_0=arg_agent_0)
+		os._exit(0)
+
+	elif action=="delete":
+		if not arg_agent_id:
+			PRINT("ERROR: option '-agent_id <agent_id>' is mandatory in delete mode.")
+			PRINT(ERR_SYNTAX)
+			os._exit(1)
+		if not arg_project_folder:
+			PRINT("ERROR: option '-project_folder <project_folder>' is mandatory in delete mode.")
+			PRINT(ERR_SYNTAX)
+			os._exit(1)
+		if arg_grant:
+			print("WARNING: option '-grant (HIGH|MEDIUM|LOW)' is not used in delete mode.")
+		if arg_agent_0:
+			print("WARNING: option '-agent_0' is not used in delete mode.")
+		delete_agent(agent_id=arg_agent_id, project_name=arg_project_folder)
+		os._exit(0)
+
+	elif action=="edit":
+		if not arg_agent_id:
+			PRINT("ERROR: option '-agent_id <agent_id>' is mandatory in edit mode.")
+			PRINT(ERR_SYNTAX)
+			os._exit(1)
+		if not arg_project_folder:
+			PRINT("ERROR: option '-project_folder <project_folder>' is mandatory in edit mode.")
+			PRINT(ERR_SYNTAX)
+			os._exit(1)
+		if not arg_grant:
+			PRINT("ERROR: option '-grant (HIGH|MEDIUM|LOW)' is mandatory in edit mode.")
+			PRINT(ERR_SYNTAX)
+			os._exit(1)
+		if arg_agent_0:
+			print("WARNING: option '-agent_0' is not used in create mode.")
+		edit_agent(agent_id=arg_agent_id, project_name=arg_project_folder, new_grant=arg_grant)
+		os._exit(0)
+
+	else: 	# action="launch" because it was already checked that action had a value of those four (create, delete, edit or launch)
+		if not arg_agent_id:
+			PRINT("ERROR: option '-agent_id <agent_id>' is mandatory in launch mode.")
+			PRINT(ERR_SYNTAX)
+			os._exit(1)
+		if not arg_project_folder:
+			PRINT("ERROR: option '-project_folder <project_folder>' is mandatory in launch mode.")
+			PRINT(ERR_SYNTAX)
+			os._exit(1)
+		if arg_grant:
+			print("WARNING: option '-grant (HIGH|MEDIUM|LOW)' is not used in launch mode.")
+		if arg_agent_0:
+			print("WARNING: option '-agent_0' is not used in launch mode.")
+		# Instead of a launch_agent() function, the code continues below.
+
+
+	# CHECK PARAMS
+	project_path = cloudbook_path + os.sep + arg_project_folder
+	config_agent_file_path = project_path + os.sep + "agents" + os.sep + "config_"+arg_agent_id+".json"
+
+	# Check if project exists
+	if not os.path.exists(project_path):
+		PRINT("ERROR: the project '" + arg_project_folder + "' does not exist.")
+		os._exit(1)
+	# Check if agent exists
+	if not os.path.exists(config_agent_file_path):
+		PRINT("ERROR: the agent '" + arg_agent_id + "' does not exist in project '" + arg_project_folder + "'.")
+		os._exit(1)
+
+
+	### EXECUTE LAUNCH AGENT "function" ###
+	my_project_folder = arg_project_folder
 
 	# Create multiprocessing Values and Arrays
 	value_var_grant = Value("i", 0) 		# Value (integer with initial value 0) sharable by processes
@@ -1065,8 +1326,7 @@ if __name__ == "__main__":
 	value_var_port = Value("i", 0) 			# Value (integer with initial value 0) sharable by processes
 
 	# Load agent config file
-	project_path = cloudbook_path + os.sep + my_project_folder
-	agent_config_dict = loader.load_dictionary(project_path + os.sep + "agents" + os.sep + "config_"+agent_file+".json")
+	agent_config_dict = loader.load_dictionary(config_agent_file_path)
 
 	my_agent_ID = agent_config_dict["AGENT_ID"]
 	fs_path = agent_config_dict["DISTRIBUTED_FS"]
@@ -1088,7 +1348,7 @@ if __name__ == "__main__":
 
 	# Check if fs_path is not empty
 	if fs_path=='':
-		fs_path = poject_path + os.sep + "distributed"
+		fs_path = project_path + os.sep + "distributed"
 		print("Path to distributed filesystem was not set in the agent, default will be used: ", fs_path)
 
 	# Print settings
@@ -1193,9 +1453,8 @@ if __name__ == "__main__":
 			read_agents_grant_file()
 			read_cloudbook_file()
 		except:
-			print(ERR_READ_WRITE)
+			PRINT(ERR_READ_WRITE)
 			time.sleep(1)
-			print("Retrying...")
 
 	print("My du_list: ", du_list)
 

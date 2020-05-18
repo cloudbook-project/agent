@@ -46,22 +46,35 @@ verbose = False
 
 
 #####   CONSTANTS   #####
-COMMAND_SYNTAX = "\
- ____________________________________________________________________________________________________________ \n\
-|                                                                                                            |\n\
-| SYNTAX:                                                                                                    |\n\
-|   gui.py [-verbose] [-help|-syntax|-info]                                                                  |\n\
-|                                                                                                            |\n\
-| EXAMPLE:                                                                                                   |\n\
-|   gui.py -verbose                                                                                          |\n\
-|                                                                                                            |\n\
-| OPTIONS:                                                                                                   |\n\
-|   Optional:                                                                                                |\n\
-|     -verbose                            This option will make the agents print cloudbook information.      |\n\
-|     -help, -syntax, -info               This option will print this help and syntax info and terminate.    |\n\
-|                                                                                                            |\n\
-| Note: the order of the options is not relevant. Unrecognized options will be ignored.                      |\n\
-|____________________________________________________________________________________________________________|"
+FULL_HELP = \
+"""
+NAME:
+  gui.py - Allows to create, delete, edit and launch cloudbook agents from a friendly GUI interface.
+
+SYNOPSIS:
+  gui.py <options>
+
+USSAGE:
+  gui.py [-verbose]
+  gui.py (-help|-syntax|-info)
+
+EXAMPLES:
+  gui.py
+  gui.py -help
+
+DESCRIPTION:
+  gui.py allows to create, delete, edit and launch cloudbook agents from a friendly GUI interface.
+  The GUI contains a tab for each project in the machine, and several tabs inside, one for each agent plus one for creating
+  new agents and another one to see all the agents of the project at a glance. This last tab allows to see if they are stopped
+  or running and has buttons for launching, stopping and removing them.
+  Internally calls agent.py with the corresponding arguments to launch them.
+  Note: unrecognized options will be ignored.
+
+OPTIONS
+  [-verbose]                            Makes the program output traces by console. Intended for debugging. Inherited by agents.
+  -help                                 Show this full help page and terminates.
+
+"""
 
 
 
@@ -370,7 +383,7 @@ class GeneralInfoTab (ttk.Frame):
 		print("Launching agent", agent_id)
 
 		# Create the basic agent command (os generic)
-		agent_command = "agent.py -agent_id " + agent_id + " -project_folder " + self.project_name
+		agent_command = "agent.py launch -agent_id " + agent_id + " -project_folder " + self.project_name
 		if verbose:
 			agent_command += " -verbose"
 		# if log_to_file:

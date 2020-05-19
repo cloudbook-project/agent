@@ -252,7 +252,7 @@ def get_pid_agent_0_windows(project_name):
 
 # Function that returns the pid of the process in which the agent_0 is running based on the window name, which is: CLOUDBOOK_agent_0_(<project_name>)
 def get_pid_agent_0_unix(project_name):
-	output = subprocess.Popen("ps -ef | grep '[p]ython3 agent.py -agent_id agent_0 -project_folder "+project_name+"'", shell=True, stdout=subprocess.PIPE)
+	output = subprocess.Popen("ps -ef | grep '[p]ython3 agent.py launch -agent_id agent_0 -project_folder "+project_name+"'", shell=True, stdout=subprocess.PIPE)
 	response = output.communicate()
 	decoded_response = response[0].decode("utf-8")
 

@@ -116,4 +116,6 @@ It is possible to launch the GUI and the agent through a console command, which 
 
 _Note: the order of the options is not relevant in any of the programs._
 
-_Note 2: unrecognized options will be ignored (you will be alerted though if verbose is ON)._
+_Note 2: remember that the scripts must be run with python3, then you should use the full syntax `python3 <command>` in Unix and `py -3 <command>` in Windows._
+
+_Note 3: unrecognized options will be ignored (you will be alerted though if verbose is ON)._

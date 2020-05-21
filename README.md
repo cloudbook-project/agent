@@ -113,5 +113,7 @@ It is possible to launch the GUI and the agent through a console command, which 
 	* _No mode_:
 		**(-help|-syntax|-info)**               Shows this full help page and terminates.
 
+
 _Note: the order of the options is not relevant in any of the programs._
+
 _Note 2: unrecognized options will be ignored (you will be alerted though if verbose is ON)._

@@ -968,7 +968,7 @@ def create_stats(t1):
 # (a port collision), restarts the FlaskProcess.
 def init_flask_process_and_check_ok(cold_redeploy):
 	global my_agent_ID, my_project_folder, fs_path, start_port_search, mp_flask2agent_queue, mp_agent2flask_queue, flask_proc
-	global array_var_ip, value_var_port, value_var_grant
+	global array_var_ip, value_var_port, value_var_grant, flask_proc_ver
 	# Create the init_info_item for FlaskProcess
 	# {"init_info": {"my_agent_ID": my_agent_ID, "my_project_folder": my_project_folder, "fs_path": fs_path, 
 	#				"start_port_search": start_port_search}}

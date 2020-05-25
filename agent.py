@@ -645,8 +645,10 @@ def create_agent(grant, project_name, fs=False, agent_0=False):
 		print("  Grant    = ", grant)
 		print("  FSPath   = ", fs)
 		print()
+		if not verbose:
+			PRINT("Created", agent_ID)
 	except Exception as e:
-		PRINT("ERROR: it was not possible to create the agent '" + agent_id + "' in the project '" + project_name + "'.")
+		PRINT("ERROR: it was not possible to create the agent '" + agent_ID + "' in the project '" + project_name + "'.")
 		os._exit(1)
 
 

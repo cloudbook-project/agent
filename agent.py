@@ -503,7 +503,8 @@ def outgoing_invoke(invocation_dict, configuration = None):
 		readed_response = r.json()
 	except Exception as e:
 		PRINT(ERR_NO_JSON_RESPONSE)
-		#raise e
+		PRINT("PRINTTTTTT:", r)
+		raise e
 	print("Response received:", readed_response)
 
 	try: 		# For functions that return some json
@@ -846,6 +847,7 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 							break
 						except:
 							PRINT(ERR_NO_JSON_RESPONSE)
+							PRINT("RESP --> ", resp)
 							retrieved_project_id = None
 						time.sleep(0.5)
 						print("Retrying...")

@@ -503,7 +503,7 @@ def outgoing_invoke(invocation_dict, configuration = None):
 		readed_response = r.json()
 	except Exception as e:
 		PRINT(ERR_NO_JSON_RESPONSE)
-		raise e
+		#raise e
 	print("Response received:", readed_response)
 
 	try: 		# For functions that return some json

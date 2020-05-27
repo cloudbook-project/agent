@@ -458,10 +458,25 @@ def outgoing_invoke(invocation_dict, configuration = None):
 
 		try:
 			r = get_session().post(url, json=invocation_dict)
-			break	# Stop iterating over the possible agents (already got a responsive one)
+			print("Response message:", r)
+
+			readed_response = r.json()
+			print("Response json received:", readed_response)
+
+			try: 		# For functions that return some json
+				data = readed_response.decode()
+				aux = eval(data)
+			except: 	# For other data types
+				aux = readed_response
+
+			return aux 					# RETURN HERE
+
 		except TypeError as e:
 			PRINT(ERR_NO_JSONIZABLE)
-			raise e
+			raise e 	# This should never happen
+		# except ValueError as e:
+		# 	print(ERR_NO_JSON_RESPONSE)
+		# 	raise e
 		except Exception as e:
 			print("POST request was not answered by " + remote_agent + " (IP:port --> " + desired_host_ip_port + ")")
 			print(e)
@@ -497,22 +512,6 @@ def outgoing_invoke(invocation_dict, configuration = None):
 				i += 1
 		# end_of_except
 	# end_of_while
-		
-	# If the loop finishes with break, then a response has been received and this invocation and function finishes normally.
-	try:
-		readed_response = r.json()
-	except Exception as e:
-		PRINT(ERR_NO_JSON_RESPONSE)
-		PRINT("PRINTTTTTT:", r)
-		raise e
-	print("Response received:", readed_response)
-
-	try: 		# For functions that return some json
-		data = readed_response.decode()
-		aux = eval(data)
-	except: 	# For other data types
-		aux = readed_response
-	return aux
 
 
 
@@ -840,14 +839,12 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 					while not retrieved_project_id:
 						try:
 							resp = get_session().get("http://localhost:"+str(local_port)+"/get_project_agent_id")#, headers={'Connection':'close'})
-						except Exception as e:
-							print(WAR_GET_PROJ_ID_REFUSED)
-						try:
 							retrieved_project_id = resp.json()
 							break
-						except:
-							PRINT(ERR_NO_JSON_RESPONSE)
-							PRINT("RESP --> ", resp)
+						# except ValueError as e:
+						# 	print(ERR_NO_JSON_RESPONSE)
+						except Exception as e:
+							print(WAR_GET_PROJ_ID_REFUSED)
 							retrieved_project_id = None
 						time.sleep(0.5)
 						print("Retrying...")
@@ -1011,6 +1008,7 @@ def init_flask_process_and_check_ok(cold_redeploy):
 				try:
 					local_port = item["flask_proc_ok"]["local_port"]
 					flask_proc_ok = True
+					print("Flask server is correclty running on port", local_port)
 					break
 				except Exception as e:
 					PRINT(ERR_QUEUE_KEY_VALUE)

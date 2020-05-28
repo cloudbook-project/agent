@@ -835,6 +835,9 @@ def flaskProcessFunction(mp_agent2flask_queue, mp_flask2agent_queue, mp_stats_qu
 						werkzeug_logger.disabled = True
 						application.logger.disabled = True
 
+					# Give time for the Flask server to start in order to minimize errors in the next check
+					time.sleep(1)
+
 					retrieved_project_id = None
 					while not retrieved_project_id:
 						try:
@@ -987,7 +990,7 @@ def init_flask_process_and_check_ok(cold_redeploy):
 	launch_item["launch_info"] = {}
 	launch_item["launch_info"]["cold_redeploy"] = cold_redeploy
 
-	# If cold_redeploy, create virtual restart request from the flask proecess
+	# If cold_redeploy, create virtual restart request from the flask process
 	if cold_redeploy:
 		mp_queue_data = {}
 		mp_queue_data["restart_flask_proc"] = "Requested restart from deployer (cold redeploy)."
@@ -1442,23 +1445,31 @@ if __name__ == "__main__":
 		#print("cloudbook.json has been read.\n cloudbook_dict_agents = ", cloudbook_dict_agents)
 		du_list = loader.load_cloudbook_agent_dus(my_agent_ID, cloudbook_dict_agents)
 
-	# Get the cloudbook and the agents_grant (DUs and IP/port of each agent).
-	while not du_list:
-		try:
-			write_agent_X_grant_file()
-			while not os.path.exists(agents_grant_file_path) or not os.path.exists(cloudbookjson_file_path) or os.stat(cloudbookjson_file_path).st_size==0:
-				print("Waiting for agents_grant.json and cloudbook.json")
-				if not os.path.exists(agent_X_grant_file_path):
-					print("My grant file was deleted! Creating it again...")
-					write_agent_X_grant_file()
-				time.sleep(1)
-			read_agents_grant_file()
-			read_cloudbook_file()
-		except:
-			PRINT(ERR_READ_WRITE)
-			time.sleep(1)
+	# Internal function to wait for cloudbook.json and agents:grant.json to be written and load their information. Only returns if du_list is not None/empty
+	def wait_for_cloudbook_and_grants():
+		global du_list
+		du_list = []
 
-	print("My du_list: ", du_list)
+		while not du_list:
+			try:
+				write_agent_X_grant_file()
+				while not os.path.exists(agents_grant_file_path) or not os.path.exists(cloudbookjson_file_path) or os.stat(cloudbookjson_file_path).st_size==0:
+					print("Waiting for agents_grant.json and cloudbook.json")
+					if not os.path.exists(agent_X_grant_file_path):
+						print("My grant file was deleted! Creating it again...")
+						write_agent_X_grant_file()
+					time.sleep(1)
+				read_agents_grant_file()
+				read_cloudbook_file()
+			except:
+				PRINT(ERR_READ_WRITE)
+				time.sleep(1)
+
+		print("The files agents_grant.json and cloudbook.json have been found and readed.")
+		print("My du_list: ", du_list)
+
+	# Get the cloudbook and the agents_grant (DUs and IP/port of each agent)
+	wait_for_cloudbook_and_grants()
 
 	# Pass the deploy_info to the FlaskProcess
 	# {"deploy_info": {"du_list": du_list, "cloudbook_dict_agents": cloudbook_dict_agents, "agents_grant": agents_grant}}
@@ -1489,7 +1500,7 @@ if __name__ == "__main__":
 
 			# Check if there are redeployment files
 			(hot_redeploy, cold_redeploy) = check_redeploy_files()
-			if hot_redeploy:
+			if hot_redeploy and not cold_redeploy:
 				print("Executing HOT_REDEPLOY...")
 				read_agents_grant_file()
 				read_cloudbook_file()
@@ -1511,11 +1522,8 @@ if __name__ == "__main__":
 					port = local_port
 				grant_dictionary[my_agent_ID]["PORT"] = port
 
-				# It is supposed that agents_grant.json and cloudbook.json already exists
-				read_agents_grant_file()
-				read_cloudbook_file()
-
-				print("My new du_list: ", du_list)
+				# Get the cloudbook and the agents_grant (DUs and IP/port of each agent)
+				wait_for_cloudbook_and_grants()
 
 				# Pass the deploy_info to the FlaskProcess
 				# {"deploy_info": {"new_du_list": du_list, "cloudbook_dict_agents": cloudbook_dict_agents, "agents_grant": agents_grant}}

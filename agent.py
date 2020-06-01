@@ -1117,9 +1117,10 @@ def cloudbook_is_running(force_remove=False):
 			while not removed:
 				try:
 					os.remove(running_file_path)
-				except Exception as e:
-					print("Cloud not remove RUNNING file. Retrying...")
-					time.sleep(0.1)
+					removed = True
+				except OSError as e:
+					print("Could not remove RUNNING file. Retrying...")
+					time.sleep(2)
 			print("RUNNING file was successfully removed.")
 	return running
 
@@ -1520,6 +1521,8 @@ if __name__ == "__main__":
 				# Update the port (from None to the local_port) in the case of a lan_mode is active
 				if lan_mode:
 					port = local_port
+
+				num2value(port, value_var_port)
 				grant_dictionary[my_agent_ID]["PORT"] = port
 
 				# Get the cloudbook and the agents_grant (DUs and IP/port of each agent)

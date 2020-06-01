@@ -68,17 +68,24 @@ _Important note: the GUI is the most recommended method to control the agent for
 It is possible to launch the GUI and the agent through a console command, which admits parameters to modify the default behaviour of these. Here is a small manual for this use. **This is only recommended for developers or advanced users**.
 
 * The GUI has the following possible console syntaxes:
+
 	`gui.py [-verbose]`
+	
 	`gui.py (-help|-syntax|-info)`
 
 	Example: `gui.py -verbose`
 
 
 * The agent has the following possible console syntaxes:
+
 	`agent.py create [-agent_0] -project_folder <project_folder> -grant (HIGH|MEDIUM|LOW) [-verbose] [-help|-syntax|-info]`
+	
 	`agent.py delete -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-help|-syntax|-info]`
+	
 	`agent.py edit -agent_id <agent_id> -project_folder <project_folder> -grant (HIGH|MEDIUM|LOW) [-verbose] [-help|-syntax|-info]`
+	
 	`agent.py launch -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-help|-syntax|-info]`
+	
 	`agent.py (-help|-syntax|-info)`
 
 	Example: `agent.py launch -agent_id agent_S4MY6ZGKQRT8RTVWLJZP -project_folder NBody -verbose`

@@ -371,7 +371,7 @@ def outgoing_invoke(invocation_dict, configuration = None):
 			possible_alarms = ["CRITICAL", "WARNING"]
 			assert alarm_name in possible_alarms
 			alarm_file_path = fs_path + os.sep + alarm_name
-			open(alarm_file_path, 'a').close() 	# Create an alarm file if it does not exist
+			loader.touch(alarm_file_path)
 			print(alarm_name, " alarm file has been created.")
 		else:
 			print("Alarm not created due to the existence redeployment files.")

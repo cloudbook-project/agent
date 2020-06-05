@@ -80,18 +80,16 @@ OPTIONS
 
 #####   OVERLOAD BUILT-IN FUNCTIONS   #####
 
-# Print function overloaded in order to make it print the id before anything and keep track of the traces of each agent easier.
-def print(*args, **kwargs):
-	# If the print is just a separation, i.e.:  print()  keep it like that
-	if (len(args)==0 and len(kwargs)==0) or (len(args)==1 and len(kwargs)==0 and args[0]==''):
-		builtins.print()
-		return
-
-	if verbose:
+# Print function overloaded in order to make it print the "___ Agent GUI ___:" before anything and keep track of its traces easier.
+def print(*args, force_print=False, **kwargs):
+	# Only print if verbose mode is enabled
+	if verbose or force_print:
 		builtins.print("___ Agent GUI ___:", *args, **kwargs)
-	else:
-		pass
 
+
+# Alias to call the overloaded builtin function with the force_print parameter set to True
+def PRINT(*args, **kwargs):
+	print(*args, force_print=True, **kwargs)
 
 
 #####   GUI FUNCTIONS   #####
@@ -192,9 +190,9 @@ def get_info():
 
 
 def sigint_handler(*args):
-	print("\n\nAll running agents on any project (if any) will be stopped...")
+	print("All running agents on any project (if any) will be stopped...")
 	kill_all_processes()
-	print("\nExiting program...\n")
+	print("\n\nExiting program...\n")
 	os._exit(0)
 
 

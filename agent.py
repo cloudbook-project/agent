@@ -56,8 +56,10 @@ mp_stats_queue = None
 # Global variable to store the general path to cloudbook, used to access all files and folders needed
 if platform.system()=="Windows":
 	cloudbook_path = os.environ['HOMEDRIVE'] + os.environ['HOMEPATH'] + os.sep + "cloudbook"
+	max_th_id_len = 5
 else:
 	cloudbook_path = os.environ['HOME'] + os.sep + "cloudbook"
+	max_th_id_len = 15
 
 # Path to the project the agent belongs to
 project_path = None
@@ -245,11 +247,8 @@ def print(*args, force_print=False, **kwargs):
 	if verbose or force_print:
 		if my_agent_ID is None: 				# If no agent_id is set, do a normal print
 			builtins.print(*args, **kwargs)
-		else:									# If agent_id is set, print its ID and colon before the string
-			if my_agent_ID == "agent_0": 			# For the agent_0 add dots to make strings start at the same letter column in the console
-				builtins.print(my_agent_ID + "...................:", *args, **kwargs)
-			else:
-				builtins.print(my_agent_ID + ":", *args, **kwargs)
+		else:									# If agent_id is set, print its ID and the thread ID ening in colon before the string
+			builtins.print(my_agent_ID.ljust(26, ".") + ":th_" + str(threading.get_ident()).rjust(max_th_id_len, "0") + ":", *args, **kwargs)
 
 
 # Alias to call the overloaded builtin function with the force_print parameter set to True
@@ -294,7 +293,7 @@ def invoke(configuration = None):
 
 	print("=====AGENT: /INVOKE=====")
 	print("Thread ID:", threading.get_ident())
-	invoked_data = ""
+	print("Request IP address:", request.remote_addr)
 	params = None
 
 	request_data = request.get_json()
@@ -353,7 +352,7 @@ def invoke(configuration = None):
 
 	# If the function does not belong to this agent
 	else:
-		print("This function does not belong to this agent.")
+		print("The function (" + invoked_du +"."+invoked_function + ") does not belong to this agent.")
 		eval_result = "none"
 
 	return eval_result

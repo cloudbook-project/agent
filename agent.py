@@ -116,12 +116,13 @@ NAME:
   agent.py - Allows to create, delete, edit and launch cloudbook agents.
 
 SYNOPSIS:
-  agent.py (create|delete|edit|launch) <options>
+  agent.py (create|delete|edit|list|launch) <options>
 
 USSAGE:
   agent.py create [-agent_0] -project_folder <project_folder> -grant (HIGH|MEDIUM|LOW) [-verbose] [-help|-syntax|-info]
   agent.py delete -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-help|-syntax|-info]
   agent.py edit -agent_id <agent_id> -project_folder <project_folder> -grant (HIGH|MEDIUM|LOW) [-verbose] [-help|-syntax|-info]
+  agent.py list -project_folder <project_folder> [-verbose] [-help|-syntax|-info]
   agent.py launch -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-help|-syntax|-info]
   agent.py (-help|-syntax|-info)
 
@@ -129,11 +130,12 @@ EXAMPLES:
   agent.py create -agent_0 -project_folder hanoi -grant MEDIUM
   agent.py delete -agent_id agent_6Q291JDWX0WJ3EI6Y1NZ -project_folder hanoi -grant MEDIUM
   agent.py edit -agent_id agent_LCXEP7SYDDW51SJ0Z9VE -project_folder test -grant MEDIUM
+  agent.py list -project_folder test
   agent.py launch -agent_id agent_S4MY6ZGKQRT8RTVWLJZP -project_folder NBody -verbose
   agent.py -help
 
 DESCRIPTION:
-  agent.py allows to create, delete, edit and launch cloudbook agents.
+  agent.py allows to create, delete, edit, list and launch cloudbook agents.
   The agent_id may be 'agent_0' or 'agent_'followed by a 20 alfanumeric charancters string (only uppercase and numbers).
   Using -help with a mode set will display help only for that mode. This full help can be displayed using 'agent.py -help'.
   Note: the order of the options is not relevant. Unrecognized options will be ignored.
@@ -158,6 +160,11 @@ OPTIONS
     -grant <HIGH|MEDIUM|LOW>            The new grant level of the agent.
     [-verbose]                          Makes the program output traces by console. Intended for debugging.
     [-help|-syntax|-info]               Shows edit help and terminates.
+
+  Mode 'list': allows to list all the existing agents in a project.
+    -project_folder <project_folder>    The name of the folder for which agents will be listed.
+    [-verbose]                          Makes the program output traces by console. Intended for debugging.
+    [-help|-syntax|-info]               Shows list help and terminates.
 
   Mode 'launch': allows to launch an existing agent. If it does not exist, does nothing.
     -agent_id <agent_id>                The name of the agent to be launched.
@@ -219,6 +226,23 @@ Edit options:
   [-verbose]                          Makes the program output traces by console. Intended for debugging.
   [-help|-syntax|-info]               Shows edit help and terminates.
 """
+
+LIST_HELP = \
+"""
+Displaying help for list.
+
+Ussage:
+  agent.py list -project_folder <project_folder> [-verbose] [-help|-syntax|-info]
+
+Description
+  Allows to list all the existing agents in a project.
+
+List options:
+  -project_folder <project_folder>    The name of the folder for which agents will be listed.
+  [-verbose]                          Makes the program output traces by console. Intended for debugging.
+  [-help|-syntax|-info]               Shows list help and terminates.
+"""
+
 
 LAUNCH_HELP = \
 """
@@ -668,7 +692,7 @@ def delete_agent(agent_id, project_name):
 
 	try:
 		os.remove(config_agent_file_path)
-		print("The agent '" + agent_id + "' from the project '" + project_name + "' has been successfully deleted.")
+		PRINT("The agent '" + agent_id + "' from the project '" + project_name + "' has been successfully deleted.")
 	except Exception as e:
 		PRINT("ERROR: the agent '" + agent_id + "' from the project '" + project_name + "' could not be deleted.")
 		os._exit(1)
@@ -700,15 +724,50 @@ def edit_agent(agent_id, project_name, new_grant='', new_fs=''):
 
 	if new_grant!='' and new_grant!=None:
 		config_dict["GRANT_LEVEL"] = new_grant
-		print("The agent '" + agent_id + "' from the project '" + project_name + "' now has a new grant: " + new_grant + ".")
+		PRINT("The agent '" + agent_id + "' from the project '" + project_name + "' now has a new grant: " + new_grant + ".")
 
 	if new_fs!='' and new_fs!=None:
 		config_dict["DISTRIBUTED_FS"] = new_fs
-		print("The agent '" + agent_id + "' from the project '" + project_name + "' now has a new fs: " + new_fs + ".")
+		PRINT("The agent '" + agent_id + "' from the project '" + project_name + "' now has a new fs: " + new_fs + ".")
 
 	# Write new config
 	loader.write_dictionary(config_dict, config_agent_file_path)
 
+def list_agents_in_project(project_name):
+	project_path = cloudbook_path + os.sep + project_name
+
+	# CHECK PARAMS
+	# Check if project exists
+	if not os.path.exists(project_path):
+		PRINT("ERROR: the project '" + project_name + "' does not exist.")
+		os._exit(1)
+
+	# Check if agents folder exists inside the project
+	agents_path = project_path + os.sep + "agents"
+	if not os.path.exists(agents_path):
+		PRINT("ERROR: the folder agents does not exist in the project '" + project_name + "'.")
+
+	# List with all the agents in the project
+	all_files = next(os.walk(agents_path))[2]
+
+	# Cleaning. If file does not start with "config_agent_" and end in ".json" it is not an agent config file.
+	files = [file for file in all_files if  "config_agent_" in file and \
+											"config_agent_"==file[:13] and \
+											".json" in file and \
+											".json"==file[-5:]]
+	for file in all_files:
+		if file not in files:
+			print("The file 'agents/" + file + "' from the project '" + project_name + "' has been ignored. It is not agent configuration name compliant.")
+
+	# Create and fill the agents list
+	agents_list = []
+	for file in files:
+		agents_list.append(loader.load_dictionary(agents_path + os.sep + file))
+
+	if agents_list:
+		PRINT(*agents_list, sep="\n")
+	else:
+		PRINT("There are no agents in the project '" + project_name + "'.")
 
 # This function launches the flask server in the port given as parameter.
 def flaskAppThreadFunction(port, sock=None):
@@ -1089,6 +1148,7 @@ def get_local_ip():
 
 # This function gets the local IP if the lan_mode is set to True and the external IP and port if the lan_mode is set to False.
 # The function raises an exception if it could not retrieve the requested data.
+@loader.retry(max_retries=3)
 def get_port_and_ip(lan_mode=True):
 	ip, port = None, None
 
@@ -1180,6 +1240,8 @@ if __name__ == "__main__":
 				PRINT(DELETE_HELP)
 			elif action=="edit":
 				PRINT(EDIT_HELP)
+			elif action=="list":
+				PRINT(LIST_HELP)
 			elif action=="launch":
 				PRINT(LAUNCH_HELP)
 			else:
@@ -1187,7 +1249,7 @@ if __name__ == "__main__":
 			os._exit(0)
 
 		# Check if action is not correct
-		if action not in ["create", "delete", "edit", "launch"]:
+		if action not in ["create", "delete", "edit", "list", "launch"]:
 			PRINT(ERR_SYNTAX)
 			os._exit(1)
 	except:
@@ -1291,7 +1353,21 @@ if __name__ == "__main__":
 		edit_agent(agent_id=arg_agent_id, project_name=arg_project_folder, new_grant=arg_grant)
 		os._exit(0)
 
-	else: 	# action="launch" because it was already checked that action had a value of those four (create, delete, edit or launch)
+	elif action=="list":
+		if arg_agent_id:
+			print("WARNING: option '-agent_id <agent_id>' is not used in list mode.")
+		if not arg_project_folder:
+			PRINT("ERROR: option '-project_folder <project_folder>' is mandatory in list mode.")
+			PRINT(ERR_SYNTAX)
+			os._exit(1)
+		if arg_grant:
+			print("WARNING: option '-grant (HIGH|MEDIUM|LOW)' is not used in list mode.")
+		if arg_agent_0:
+			print("WARNING: option '-agent_0' is not used in list mode.")
+		list_agents_in_project(project_name=arg_project_folder)
+		os._exit(0)
+
+	else: 	# action="launch" because it was already checked that action had a value of those five (create, delete, edit, list or launch)
 		if not arg_agent_id:
 			PRINT("ERROR: option '-agent_id <agent_id>' is mandatory in launch mode.")
 			PRINT(ERR_SYNTAX)
@@ -1347,9 +1423,17 @@ if __name__ == "__main__":
 	# Load circle config file
 	configjson_dict = loader.load_dictionary(fs_path + os.sep + "config.json")
 
-	agent_stats_interval = configjson_dict['AGENT_STATS_INTERVAL']
-	agent_grant_interval = configjson_dict['AGENT_GRANT_INTERVAL']
-	lan_mode = configjson_dict['LAN']
+	agent_stats_interval = configjson_dict.get('AGENT_STATS_INTERVAL', None)
+	agent_grant_interval = configjson_dict.get('AGENT_GRANT_INTERVAL', None)
+	subnet = configjson_dict.get('SUBNET', None)
+	if type(subnet)==str:
+		subnet = subnet.split('/')
+	lan_mode = configjson_dict.get('LAN', None)
+
+	assert agent_stats_interval is not None
+	assert agent_grant_interval is not None
+	assert (subnet is not None or lan_mode is not None)
+
 
 	# Check if fs_path is not empty
 	if fs_path=='':
@@ -1388,18 +1472,7 @@ if __name__ == "__main__":
 	threading.Thread(target=create_stats, args=(agent_stats_interval,)).start()
 
 	# Try (up to 3 times) to get ip and port to share with the rest of cloudbook
-	retrys = 3
-	for i in range(retrys):
-		try:
-			(ip, port) = get_port_and_ip(lan_mode=lan_mode)
-			break
-		except Exception as e:
-			print(e)
-			if i!=retrys:
-				time.sleep(1)
-				print("Retrying...")
-			else:
-				raise e
+	(ip, port) = get_port_and_ip(lan_mode=lan_mode)
 
 	# Number where the search for a free port will begin
 	start_port_search = 5000

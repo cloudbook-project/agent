@@ -84,13 +84,15 @@ It is possible to launch the GUI and the agent through a console command, which 
 	
 	`agent.py edit -agent_id <agent_id> -project_folder <project_folder> -grant (HIGH|MEDIUM|LOW) [-verbose] [-help|-syntax|-info]`
 	
+	`agent.py list -project_folder <project_folder> [-verbose] [-help|-syntax|-info]`
+
 	`agent.py launch -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-help|-syntax|-info]`
 	
 	`agent.py (-help|-syntax|-info)`
 
 	Example: `agent.py launch -agent_id agent_S4MY6ZGKQRT8RTVWLJZP -project_folder NBody -verbose`
 
-	As it can be seen, each of the functioning modes (create, delete, edit, launch) has a different set of possibe options:
+	As it can be seen, each of the functioning modes (create, delete, edit, list, launch) has a different set of possibe options:
 	* _Mode 'create'_: allows to create a new agent. A random agent_id will be used unless option -agent_0 is used.
 		**[-agent_0]**                          Makes the program create the agent_0 instead a random one.
 		**-project_folder <project_folder>**    The name of the folder in which the agent will be created.
@@ -110,6 +112,11 @@ It is possible to launch the GUI and the agent through a console command, which 
 		**-grant <HIGH|MEDIUM|LOW>**            The new grant level of the agent.
 		**[-verbose]**                          Makes the program output traces by console. Intended for debugging.
 		**[-help|-syntax|-info]**               Shows edit help and terminates.
+
+	* _Mode 'list'_: allows to list all the existing agents in a project.
+		**-project_folder <project_folder>**    The name of the folder for which agents will be listed.
+		**[-verbose]**                          Makes the program output traces by console. Intended for debugging.
+		**[-help|-syntax|-info]**               Shows list help and terminates.
 
 	* _Mode 'launch'_: allows to launch an existing agent. If it does not exist, does nothing.
 		**-agent_id <agent_id>**                The name of the agent to be launched.

@@ -397,7 +397,7 @@ def outgoing_invoke(invocation_dict, configuration = None):
 			loader.touch(alarm_file_path)
 			print(alarm_name, " alarm file has been created.")
 		else:
-			print("Alarm not created due to the existence redeployment files.")
+			print("Alarm not created due to the existence of redeployment files.")
 
 	print("=====AGENT: OUTGOING_INVOKE=====")
 	print("Thread ID: ", threading.get_ident())
@@ -503,24 +503,40 @@ def outgoing_invoke(invocation_dict, configuration = None):
 		except Exception as e:
 			print("POST request was not answered by " + remote_agent + " (IP:port --> " + desired_host_ip_port + ")")
 			print(e)
-			write_alarm("WARNING")
 
-			if remote_agent == last_agent: 	# If all agents have been tested
-				print("No agents available to execute the requested function.")
-				if is_critical(invoked_du): 	# If the du is critical
-					print("The function that could not be invoked is in a critical du: ", invoked_du + "." + invoked_function)
-					write_alarm("CRITICAL")
+			# If the du is critical
+			if is_critical(invoked_du):
+				print("The function that could not be invoked is in a critical du: ", invoked_du + "." + invoked_function)
+				write_alarm("CRITICAL")
+
+				# If all agents have been tried
+				if remote_agent == last_agent:
+					print("No agents available to execute the requested function.")
+
+					# Wait until a cold redeployment stops and restarts Flask process
 					while True:
-						time.sleep(1)
 						print("This agent has detected a problem and will be automatically restarted.")
-				else: 	# If the du is NOT critical
-					print("The function that could not be invoked is in a NON-critical du: ", invoked_du + "." + invoked_function)
-					
-					# Wait until new cloudbook version is charged
+						time.sleep(5)
+
+				# If there are still agents to try (there is only one agent for each critical DU --> this does not happen)
+				else:
+					print("Retrying...")
+					i += 1
+
+			# If the du is NOT critical
+			else:
+				print("The function that could not be invoked is in a NON-critical du: ", invoked_du + "." + invoked_function)
+				write_alarm("WARNING")
+
+				# If all agents have been tried
+				if remote_agent == last_agent:
+					print("No agents available to execute the requested function.")
+
+					# Wait until new cloudbook version is charged (with a hot redeployment)
 					while invocation_cloudbook_version == cloudbook_version:
 						print("Waiting for redeployment to reallocate " + invoked_du + " in an accessible agent.")
 						time.sleep(1)
-					
+
 					# Refresh the variables after the hot redeployment in order to try again
 					list_agents = list(cloudbook_dict_agents.get(invoked_du))
 					invocation_cloudbook_version = cloudbook_version
@@ -530,9 +546,10 @@ def outgoing_invoke(invocation_dict, configuration = None):
 					i = 0
 					print("Retrying with new cloudbook...")
 
-			else: 	# If there are still agents to try
-				print("Retrying...")
-				i += 1
+				# If there are still agents to try
+				else:
+					print("Retrying...")
+					i += 1
 		# end_of_except
 	# end_of_while
 

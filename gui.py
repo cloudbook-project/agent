@@ -770,8 +770,11 @@ if __name__ == '__main__':
 		print("For more info type 'gui.py -help'")
 		os._exit(1)
 
+	# Extend verbosity
+	agent.verbose = verbose
 	if verbose:
 		print("Launched in verbose mode. Agents will be launched in verbose mode as well.")
+
 		# print("verbose:", verbose)
 		# print("log:", log_to_file)
 

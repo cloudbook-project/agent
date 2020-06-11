@@ -3,8 +3,9 @@
 from werkzeug.serving import WSGIRequestHandler
 from flask import Flask, request	# Requires pip3 install flask
 from pynat import get_ip_info		# Requires pip3 install pynat
-import requests 					# Requires pip3 install requests
+import requests						# Requires pip3 install requests
 import socket
+import ifaddr						# Requires pip3 install ifaddr
 
 # Multi thread/process
 import time
@@ -21,6 +22,7 @@ import logging
 # Basic
 import random, string, builtins
 import json
+import re
 
 
 
@@ -1131,6 +1133,82 @@ def init_flask_process_and_check_ok(cold_redeploy):
 		raise Exception(GEN_ERR_INIT_CHECK_FLASK)
 
 
+# This function returns the ip for the agent (the one that will be published in the agent_XX_grant.json)
+def get_my_ip(subnet):
+	ipv4_list = get_ipv4s_from_adapters()
+	# print("all_my_ipv4s:", ipv4_list)
+
+	valid_ipv4_list = []
+	for ip in ipv4_list:
+		if chek_ip_in_subnet(ip=ip, subnet=subnet):
+			valid_ipv4_list.append(ip)
+	# print("valid_ipv4_list:", valid_ipv4_list)
+	if not valid_ipv4_list:
+		raise Exception("ERROR: no IPs (version 4) in this machine satisfy the proposed subnet requirements.")
+
+	return valid_ipv4_list[0]
+
+# This function returns a list with all the ips version 4 of the network adapters in the machine
+def get_ipv4s_from_adapters():
+	adapters = ifaddr.get_adapters()
+
+	ipv4_list = []
+	for adapter in adapters:
+		for ip in adapter.ips:
+			ip_number = ip.ip
+			if type(ip_number)==str:
+				ipv4_list.append(ip_number)
+	return ipv4_list
+
+
+# This function converts a string ip with the format "A.B.C.D" to the one integer number that corresponds to that ip
+def ip_str2int(ip):
+	# ip = "A.B.C.D"
+
+	# ip_split = ["A", "B", "C", "D"]
+	ip_split = ip.split(".")
+
+	# ip_split_dec = [A, B, C, D]
+	ip_split_dec = [int(byte_i) for byte_i in ip_split]
+
+	# int_ip = A*2^24 + B*2^16 + C*2^8 + D
+	int_ip = 0
+	for byte_i in ip_split_dec:
+		int_ip *= 2**8 		# result = result x 2^8
+		int_ip += byte_i
+
+	return int_ip
+
+# This function creates a mask (integer) for ipv4s. The mask_size is the number of 1s (the rest will be 0s up to 32 bits number)
+def create_mask(mask_size):
+	assert mask_size>=0 and mask_size<=32
+	binstr_mask = "0b" + "".ljust(mask_size, "1").ljust(32, "0") 	# "0b" + string with mask_size 1s and the rest of 0s (up to 32 digits)
+	mask = int(binstr_mask, 2)
+
+	return mask
+
+
+# This function returns if the given ip belongs to the given subnet.
+# ip = "x.x.x.x"
+# subnet = ("x.x.x.x", N)
+def chek_ip_in_subnet(ip, subnet):
+
+	subnet_ip = subnet[0]
+	mask_size = subnet[1]
+	assert mask_size>=0 and mask_size<=32
+
+	int_ip = ip_str2int(ip)
+	int_subnet_ip = ip_str2int(subnet_ip)
+	mask = create_mask(mask_size=mask_size)
+
+	# For visual comparison
+	# print("\nComparison:")
+	# print("IP 1:", "0b"+bin(int_ip)       [2:].zfill(32))
+	# print("IP 2:", "0b"+bin(int_subnet_ip)[2:].zfill(32))
+	# print("MASK:", "0b"+bin(mask)         [2:].zfill(32))
+
+	return (int_ip & mask)==(int_subnet_ip & mask)
+
 # This function finds the first port available strating from the port given as parameter onwards. Returns the port and the
 # socket which is blocking the port for other applications (close it before attempting to run any application in that port).
 def get_port_available(port):
@@ -1166,17 +1244,22 @@ def get_local_ip():
 # This function gets the local IP if the lan_mode is set to True and the external IP and port if the lan_mode is set to False.
 # The function raises an exception if it could not retrieve the requested data.
 @loader.retry(max_retries=3)
-def get_port_and_ip(lan_mode=True):
+def get_port_and_ip(subnet, lan_mode):
 	ip, port = None, None
 
-	if lan_mode:
-		ip = get_local_ip()
-		if ip==None:
-			raise Exception(ERR_NO_LAN)
+	# If subnet was specified, try to find an IP of one of the network adapters in this machine that belongs to it
+	if subnet is not None:
+		ip = get_my_ip(subnet=subnet)
+	# If subnet was not specified, consider lan_mode
 	else:
-		(_, ip, port) = get_ip_info() 
-		if ip==None or port==None:
-			raise Exception(ERR_NO_INTERNET)
+		if lan_mode:
+			ip = get_local_ip()
+			if ip==None:
+				raise Exception(ERR_NO_LAN)
+		else:
+			(_, ip, port) = get_ip_info()
+			if ip==None or port==None:
+				raise Exception(ERR_NO_INTERNET)
 	return (ip, port)
 
 
@@ -1437,20 +1520,26 @@ if __name__ == "__main__":
 	# Change working directory
 	os.chdir(fs_path + os.sep + "working_dir")
 
-	# Load circle config file
+	# Load data from config.json file and assert it is correct
 	configjson_dict = loader.load_dictionary(fs_path + os.sep + "config.json")
 
 	agent_stats_interval = configjson_dict.get('AGENT_STATS_INTERVAL', None)
+	assert type(agent_stats_interval) in [int, float] and agent_stats_interval>=3
+
 	agent_grant_interval = configjson_dict.get('AGENT_GRANT_INTERVAL', None)
-	subnet = configjson_dict.get('SUBNET', None)
-	if type(subnet)==str:
-		subnet = subnet.split('/')
-	lan_mode = configjson_dict.get('LAN', None)
+	assert type(agent_grant_interval) in [int, float] and agent_grant_interval>=3
 
-	assert agent_stats_interval is not None
-	assert agent_grant_interval is not None
-	assert (subnet is not None or lan_mode is not None)
-
+	subnet = configjson_dict.get('SUBNET', None)	# If SUBNET exists, LAN is ignored
+	if subnet is not None: 	# exists
+		assert type(subnet)==str
+		pattern_subnet = r'^((25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])/(3[0-2]|[0-2]?[0-9])$'
+		assert bool(re.match(pattern_subnet, subnet)), '\n\nAssertionError: In the config.json, the SUBNET value must be a string with format "A.B.C.D/M" with A,B,C,D belonging to [0, 255] and M to [0, 32]'
+		(subnet_ip, subnet_mask) = subnet.split('/')
+		subnet = (subnet_ip, int(subnet_mask))
+		lan_mode = None
+	else:
+		lan_mode = configjson_dict.get('LAN', None)
+		assert type(lan_mode)==bool
 
 	# Check if fs_path is not empty
 	if fs_path=='':
@@ -1466,10 +1555,13 @@ if __name__ == "__main__":
 	settings_string += "  - FSPath: " + fs_path + "\n"
 	settings_string += "  - Stats creation period: " + str(agent_stats_interval) + "\n"
 	settings_string += "  - Grant file creation period: " + str(agent_grant_interval) + "\n"
-	if lan_mode:
-		settings_string += "  - Lan mode: ON (using local ip and port)\n"
+	if subnet is not None:
+		settings_string += "  - Subnet: " + subnet[0]+"/"+str(subnet[1]) + "\n"
 	else:
-		settings_string += "  - Lan mode: OFF (using external ip and port)\n"
+		if lan_mode:
+			settings_string += "  - Lan mode: ON (using local ip and port)\n"
+		else:
+			settings_string += "  - Lan mode: OFF (using external ip and port)\n"
 	print(settings_string)
 
 	# Input/output queues for process communication
@@ -1488,8 +1580,8 @@ if __name__ == "__main__":
 	# Launch the stats file creator thread
 	threading.Thread(target=create_stats, args=(agent_stats_interval,)).start()
 
-	# Try (up to 3 times) to get ip and port to share with the rest of cloudbook
-	(ip, port) = get_port_and_ip(lan_mode=lan_mode)
+	# Try to get ip and port to publish in the agent_XX_grant.json
+	(ip, port) = get_port_and_ip(subnet=subnet, lan_mode=lan_mode)
 
 	# Number where the search for a free port will begin
 	start_port_search = 5000
@@ -1498,7 +1590,7 @@ if __name__ == "__main__":
 	local_port = init_flask_process_and_check_ok(cold_redeploy=False)
 
 	# Update the port (from None to the local_port) in the case of a lan_mode is active
-	if lan_mode:
+	if subnet is not None or lan_mode:
 		port = local_port
 
 	string2array(ip, array_var_ip)
@@ -1608,7 +1700,7 @@ if __name__ == "__main__":
 				local_port = init_flask_process_and_check_ok(cold_redeploy=True)
 
 				# Update the port (from None to the local_port) in the case of a lan_mode is active
-				if lan_mode:
+				if subnet is not None or lan_mode:
 					port = local_port
 
 				num2value(port, value_var_port)

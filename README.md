@@ -13,6 +13,9 @@ The Cloudbook agent component runs in each of the machines of a project and it i
 	- pynat
 	- requests
 	- psutil
+	- ifaddr
+
+Command to install python modules for Windows (be sure to have admin privileges): `pip3 install flask pynat requests psutil ifaddr`
 
 _Note: any extra library that has to be imported in the code to execute, must be installed previously in the machine (i.e. if you want to run a game that uses pygame you have to install it previousy in each agent machine)_
 
@@ -39,7 +42,7 @@ Despite the fact that the graphical interface has been developed thinking on the
 	* Option B)
 		1. Open a cmd or shell window.
 		2. Navigate to the cloudbook agent folder (the cloned/downloaded repository)
-		3. Type `python gui.py` and press enter.  (For more info type `gui.py -help`)
+		3. Type `python gui.py` and press enter. (For more info type `gui.py -help`)
 
 * Creating agents with the GUI:
 	1. Select the project tab in which you want create the agent.

@@ -301,6 +301,7 @@ def get_project_agent_id():
 	print("/get_project_agent_id route has been invoked.")
 	return json.dumps(my_project_folder + " - " + my_agent_ID)
 
+
 # @application.route('/quit')
 # def flask_quit():
 # 	func = request.environ.get('werkzeug.server.shutdown')
@@ -752,6 +753,8 @@ def edit_agent(agent_id, project_name, new_grant='', new_fs=''):
 	# Write new config
 	loader.write_dictionary(config_dict, config_agent_file_path)
 
+
+# This function lists the agents and their information for the project specified
 def list_agents_in_project(project_name):
 	project_path = cloudbook_path + os.sep + project_name
 
@@ -788,6 +791,7 @@ def list_agents_in_project(project_name):
 	else:
 		PRINT("There are no agents in the project '" + project_name + "'.")
 
+
 # This function launches the flask server in the port given as parameter.
 def flaskAppThreadFunction(port, sock=None):
 	port = int(port)
@@ -805,6 +809,7 @@ def parentAliveWatcherThreadFunction(ppid):
 	psutil.Process(ppid).wait()
 	print("The main Agent process ended leaving the Flask process orphan. Stopping it...")
 	os._exit(1)
+
 
 # This function terinates this process if the flask process is terminated when if must not.
 def childAliveWatcherThreadFunction(pid, version):
@@ -1148,6 +1153,7 @@ def get_my_ip(subnet):
 
 	return valid_ipv4_list[0]
 
+
 # This function returns a list with all the ips version 4 of the network adapters in the machine
 def get_ipv4s_from_adapters():
 	adapters = ifaddr.get_adapters()
@@ -1178,6 +1184,7 @@ def ip_str2int(ip):
 		int_ip += byte_i
 
 	return int_ip
+
 
 # This function creates a mask (integer) for ipv4s. The mask_size is the number of 1s (the rest will be 0s up to 32 bits number)
 def create_mask(mask_size):

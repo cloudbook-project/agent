@@ -56,7 +56,7 @@ SYNOPSIS:
 
 USSAGE:
   gui.py [-verbose]
-  gui.py (-help|-syntax|-info)
+  gui.py {-help|-syntax|-info}
 
 EXAMPLES:
   gui.py

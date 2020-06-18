@@ -118,19 +118,19 @@ NAME:
   agent.py - Allows to create, delete, edit and launch cloudbook agents.
 
 SYNOPSIS:
-  agent.py (create|delete|edit|list|launch) <options>
+  agent.py {create|delete|edit|list|launch} <options>
 
 USSAGE:
-  agent.py create [-agent_0] -project_folder <project_folder> -grant (HIGH|MEDIUM|LOW) [-verbose] [-help|-syntax|-info]
+  agent.py create [-agent_0] -project_folder <project_folder> -grant {HIGH|MEDIUM|LOW} [-verbose] [-help|-syntax|-info]
   agent.py delete -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-help|-syntax|-info]
-  agent.py edit -agent_id <agent_id> -project_folder <project_folder> -grant (HIGH|MEDIUM|LOW) [-verbose] [-help|-syntax|-info]
+  agent.py edit -agent_id <agent_id> -project_folder <project_folder> -grant {HIGH|MEDIUM|LOW} [-verbose] [-help|-syntax|-info]
   agent.py list -project_folder <project_folder> [-verbose] [-help|-syntax|-info]
   agent.py launch -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-help|-syntax|-info]
-  agent.py (-help|-syntax|-info)
+  agent.py {-help|-syntax|-info}
 
 EXAMPLES:
   agent.py create -agent_0 -project_folder hanoi -grant MEDIUM
-  agent.py delete -agent_id agent_6Q291JDWX0WJ3EI6Y1NZ -project_folder hanoi -grant MEDIUM
+  agent.py delete -agent_id agent_6Q291JDWX0WJ3EI6Y1NZ -project_folder hanoi
   agent.py edit -agent_id agent_LCXEP7SYDDW51SJ0Z9VE -project_folder test -grant MEDIUM
   agent.py list -project_folder test
   agent.py launch -agent_id agent_S4MY6ZGKQRT8RTVWLJZP -project_folder NBody -verbose
@@ -146,7 +146,7 @@ OPTIONS
   Mode 'create': allows to create a new agent. A random agent_id will be used unless option -agent_0 is used.
     [-agent_0]                          Makes the program create the agent_0 instead a random one.
     -project_folder <project_folder>    The name of the folder in which the agent will be created.
-    -grant <HIGH|MEDIUM|LOW>            The grant level of the agent to be created.
+    -grant {HIGH|MEDIUM|LOW}            The grant level of the agent to be created.
     [-verbose]                          Makes the program output traces by console. Intended for debugging.
     [-help|-syntax|-info]               Shows create help and terminates.
 
@@ -159,7 +159,7 @@ OPTIONS
   Mode 'edit': allows to modify the grant level of an existing agent. If it does not exist, does nothing.
     -agent_id <agent_id>                The name of the agent to be edited.
     -project_folder <project_folder>    The name of the folder in which the agent is located.
-    -grant <HIGH|MEDIUM|LOW>            The new grant level of the agent.
+    -grant {HIGH|MEDIUM|LOW}            The new grant level of the agent.
     [-verbose]                          Makes the program output traces by console. Intended for debugging.
     [-help|-syntax|-info]               Shows edit help and terminates.
 
@@ -175,7 +175,7 @@ OPTIONS
     [-help|-syntax|-info]               Shows launch help and terminates.
 
   No mode:
-    (-help|-syntax|-info)               Shows this full help page and terminates.
+   {-help|-syntax|-info}                Shows this full help page and terminates.
 
 """
 CREATE_HELP = \
@@ -183,7 +183,7 @@ CREATE_HELP = \
 Displaying help for create.
 
 Ussage:
-  agent.py create [-agent_id <agent_id>] -project_folder <project_folder> -grant (HIGH|MEDIUM|LOW) [-verbose] [-help|-syntax|-info]
+  agent.py create [-agent_id <agent_id>] -project_folder <project_folder> -grant {HIGH|MEDIUM|LOW} [-verbose] [-help|-syntax|-info]
 
 Description
   Allows to create a new agent. A random agent_id will be used unless option -agent_0 is used.
@@ -191,7 +191,7 @@ Description
 Create options:
   [-agent_0]                          Makes the program create the agent_0 instead a random one.
   -project_folder <project_folder>    The name of the folder in which the agent will be created.
-  -grant <HIGH|MEDIUM|LOW>            The grant level of the agent to be created.
+  -grant {HIGH|MEDIUM|LOW}            The grant level of the agent to be created.
   [-verbose]                          Makes the program output traces by console. Intended for debugging.
   [-help|-syntax|-info]               Shows create help and terminates.
 """
@@ -216,7 +216,7 @@ EDIT_HELP = \
 Displaying help for edit.
 
 Ussage:
-  agent.py edit -agent_id <agent_id> -project_folder <project_folder> -grant (HIGH|MEDIUM|LOW) [-verbose] [-help|-syntax|-info]
+  agent.py edit -agent_id <agent_id> -project_folder <project_folder> -grant {HIGH|MEDIUM|LOW} [-verbose] [-help|-syntax|-info]
 
 Description
   Allows to modify the grant level of an existing agent. If it does not exist, does nothing.
@@ -224,7 +224,7 @@ Description
 Edit options:
   -agent_id <agent_id>                The name of the agent to be edited.
   -project_folder <project_folder>    The name of the folder in which the agent is located.
-  -grant <HIGH|MEDIUM|LOW>            The new grant level of the agent.
+  -grant {HIGH|MEDIUM|LOW}            The new grant level of the agent.
   [-verbose]                          Makes the program output traces by console. Intended for debugging.
   [-help|-syntax|-info]               Shows edit help and terminates.
 """
@@ -615,6 +615,79 @@ def value2num(val_var):
 		return val_var.value
 
 
+# This function creates a string line for a table. Used in table_str()
+def line4table(list_col_sizes, is_top, is_bot, list_items=None):
+	SYM_NW = "┌"
+	SYM_NN = "┬"
+	SYM_NE = "┐"
+
+	SYM_WW = "├"
+	SYM_CC = "┼"
+	SYM_EE = "┤"
+
+	SYM_SW = "└"
+	SYM_SS = "┴"
+	SYM_SE = "┘"
+
+	SYM_HR = "─"
+	SYM_VR = "│"
+
+	if list_items:
+		sym_fill = " "
+		sym_beg = SYM_VR
+		sym_sep = SYM_VR
+		sym_end = SYM_VR
+	else:
+		list_items = ["" for i in range(len(list_col_sizes))]
+		sym_fill = SYM_HR
+		if is_top:
+			sym_beg = SYM_NW
+			sym_sep = SYM_NN
+			sym_end = SYM_NE
+		elif is_bot:
+			sym_beg = SYM_SW
+			sym_sep = SYM_SS
+			sym_end = SYM_SE
+		else:
+			sym_beg = SYM_WW
+			sym_sep = SYM_CC
+			sym_end = SYM_EE
+
+	line = sym_beg
+	is_first = True
+	for i in range(len(list_col_sizes)):
+		if is_first:
+			is_first = False
+		else:
+			line += sym_sep
+		line += list_items[i].center(list_col_sizes[i], sym_fill)
+	line += sym_end
+	return line
+
+
+# This function creates a multiline string which forms a table when printed
+def table_str(list_col_headers, list_of_rows, list_col_sizes):
+	upper_border = line4table(list_col_sizes, True, False)
+	mid_border   = line4table(list_col_sizes, False, False)
+	lower_border = line4table(list_col_sizes, False, True)
+
+	row_headers = line4table(list_col_sizes, False, False, list_col_headers)
+
+	rows = []
+	for row in list_of_rows:
+		line = line4table(list_col_sizes, False, False, row)
+		rows.append(line)
+
+	table = upper_border + "\n"
+	table += row_headers + "\n"
+	table += mid_border + "\n"
+	for i in rows:
+		table += i + "\n"
+	table += lower_border
+
+	return table
+
+
 
 #####   AGENT FUNCTIONS   #####
 
@@ -771,6 +844,7 @@ def list_agents_in_project(project_name):
 
 	# List with all the agents in the project
 	all_files = next(os.walk(agents_path))[2]
+	print("Detected files:", all_files)
 
 	# Cleaning. If file does not start with "config_agent_" and end in ".json" it is not an agent config file.
 	files = [file for file in all_files if  "config_agent_" in file and \
@@ -787,7 +861,14 @@ def list_agents_in_project(project_name):
 		agents_list.append(loader.load_dictionary(agents_path + os.sep + file))
 
 	if agents_list:
-		PRINT(*agents_list, sep="\n")
+		list_col_headers = ["AGENT_ID", "GRANT_LEVEL"]
+		list_of_rows = []
+		for agent_x in agents_list:
+			row = [agent_x["AGENT_ID"], agent_x["GRANT_LEVEL"]]
+			list_of_rows.append(row)
+		list_col_sizes = [30, 20]
+
+		PRINT(table_str(list_col_headers, list_of_rows, list_col_sizes))
 	else:
 		PRINT("There are no agents in the project '" + project_name + "'.")
 
@@ -1420,7 +1501,7 @@ if __name__ == "__main__":
 			PRINT(ERR_SYNTAX)
 			os._exit(1)
 		if not arg_grant:
-			PRINT("ERROR: option '-grant (HIGH|MEDIUM|LOW)' is mandatory in create mode.")
+			PRINT("ERROR: option '-grant {HIGH|MEDIUM|LOW}' is mandatory in create mode.")
 			PRINT(ERR_SYNTAX)
 			os._exit(1)
 		create_agent(grant=arg_grant, project_name=arg_project_folder, agent_0=arg_agent_0)
@@ -1436,7 +1517,7 @@ if __name__ == "__main__":
 			PRINT(ERR_SYNTAX)
 			os._exit(1)
 		if arg_grant:
-			print("WARNING: option '-grant (HIGH|MEDIUM|LOW)' is not used in delete mode.")
+			print("WARNING: option '-grant {HIGH|MEDIUM|LOW}' is not used in delete mode.")
 		if arg_agent_0:
 			print("WARNING: option '-agent_0' is not used in delete mode.")
 		delete_agent(agent_id=arg_agent_id, project_name=arg_project_folder)
@@ -1452,7 +1533,7 @@ if __name__ == "__main__":
 			PRINT(ERR_SYNTAX)
 			os._exit(1)
 		if not arg_grant:
-			PRINT("ERROR: option '-grant (HIGH|MEDIUM|LOW)' is mandatory in edit mode.")
+			PRINT("ERROR: option '-grant {HIGH|MEDIUM|LOW}' is mandatory in edit mode.")
 			PRINT(ERR_SYNTAX)
 			os._exit(1)
 		if arg_agent_0:
@@ -1468,7 +1549,7 @@ if __name__ == "__main__":
 			PRINT(ERR_SYNTAX)
 			os._exit(1)
 		if arg_grant:
-			print("WARNING: option '-grant (HIGH|MEDIUM|LOW)' is not used in list mode.")
+			print("WARNING: option '-grant {HIGH|MEDIUM|LOW}' is not used in list mode.")
 		if arg_agent_0:
 			print("WARNING: option '-agent_0' is not used in list mode.")
 		list_agents_in_project(project_name=arg_project_folder)
@@ -1484,7 +1565,7 @@ if __name__ == "__main__":
 			PRINT(ERR_SYNTAX)
 			os._exit(1)
 		if arg_grant:
-			print("WARNING: option '-grant (HIGH|MEDIUM|LOW)' is not used in launch mode.")
+			print("WARNING: option '-grant {HIGH|MEDIUM|LOW}' is not used in launch mode.")
 		if arg_agent_0:
 			print("WARNING: option '-agent_0' is not used in launch mode.")
 		# Instead of a launch_agent() function, the code continues below.

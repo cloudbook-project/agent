@@ -74,24 +74,24 @@ It is possible to launch the GUI and the agent through a console command, which 
 
 	`gui.py [-verbose]`
 	
-	`gui.py (-help|-syntax|-info)`
+	`gui.py {-help|-syntax|-info}`
 
 	Example: `gui.py -verbose`
 
 
 * The agent has the following possible console syntaxes:
 
-	`agent.py create [-agent_0] -project_folder <project_folder> -grant (HIGH|MEDIUM|LOW) [-verbose] [-help|-syntax|-info]`
+	`agent.py create [-agent_0] -project_folder <project_folder> -grant {HIGH|MEDIUM|LOW} [-verbose] [-help|-syntax|-info]`
 	
 	`agent.py delete -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-help|-syntax|-info]`
 	
-	`agent.py edit -agent_id <agent_id> -project_folder <project_folder> -grant (HIGH|MEDIUM|LOW) [-verbose] [-help|-syntax|-info]`
+	`agent.py edit -agent_id <agent_id> -project_folder <project_folder> -grant {HIGH|MEDIUM|LOW} [-verbose] [-help|-syntax|-info]`
 	
 	`agent.py list -project_folder <project_folder> [-verbose] [-help|-syntax|-info]`
 
 	`agent.py launch -agent_id <agent_id> -project_folder <project_folder> [-verbose] [-help|-syntax|-info]`
 	
-	`agent.py (-help|-syntax|-info)`
+	`agent.py {-help|-syntax|-info}`
 
 	Example: `agent.py launch -agent_id agent_S4MY6ZGKQRT8RTVWLJZP -project_folder NBody -verbose`
 
@@ -128,7 +128,7 @@ It is possible to launch the GUI and the agent through a console command, which 
 		**[-help|-syntax|-info]**               Shows launch help and terminates.
 
 	* _No mode_:
-		**(-help|-syntax|-info)**               Shows this full help page and terminates.
+		**{-help|-syntax|-info}**               Shows this full help page and terminates.
 
 
 _Note: the order of the options is not relevant in any of the programs._

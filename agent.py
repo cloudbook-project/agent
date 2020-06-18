@@ -617,20 +617,20 @@ def value2num(val_var):
 
 # This function creates a string line for a table. Used in table_str()
 def line4table(list_col_sizes, is_top, is_bot, list_items=None):
-	SYM_NW = "┌"
-	SYM_NN = "┬"
-	SYM_NE = "┐"
+	SYM_NW = u'\u250C'  # "┌"
+	SYM_NN = u'\u252C'  # "┬"
+	SYM_NE = u'\u2510'  # "┐"
 
-	SYM_WW = "├"
-	SYM_CC = "┼"
-	SYM_EE = "┤"
+	SYM_WW = u'\u251C'  # "├"
+	SYM_CC = u'\u253C'  # "┼"
+	SYM_EE = u'\u2524'  # "┤"
 
-	SYM_SW = "└"
-	SYM_SS = "┴"
-	SYM_SE = "┘"
+	SYM_SW = u'\u2514'  # "└"
+	SYM_SS = u'\u2534'  # "┴"
+	SYM_SE = u'\u2518'  # "┘"
 
-	SYM_HR = "─"
-	SYM_VR = "│"
+	SYM_HR = u'\u2500'  # "─"
+	SYM_VR = u'\u2502'  # "│"
 
 	if list_items:
 		sym_fill = " "
